@@ -1,190 +1,193 @@
 # AIHUBDOCs — Backend
 
-Hệ thống hỏi đáp tài liệu bằng AI. Người dùng tải tài liệu lên, hệ thống bóc tách nội dung,
-tạo vector ngữ nghĩa và cho phép đặt câu hỏi bằng ngôn ngữ tự nhiên. Câu trả lời được sinh
-ra **chỉ dựa trên tài liệu của chính người dùng**, kèm trích dẫn nguồn.
+An AI-powered document question answering system. Users upload documents, the system extracts
+the content, generates semantic vectors, and lets users ask questions in natural language.
+Answers are generated **strictly from the user's own documents**, with source citations.
 
-Đồ án môn **SWP391 — Software Development Project**.
+Course project for **SWP391 — Software Development Project**.
 
 ---
 
-## 1. Tổng quan chức năng
+## 1. Features
 
-| Nhóm chức năng | Mô tả |
+| Area | Description |
 | --- | --- |
-| Tài khoản | Đăng ký kèm xác thực OTP qua email, đăng nhập, đăng nhập bằng Google, refresh token, đặt lại mật khẩu |
-| Quản lý tài liệu | Tải lên, phân thư mục, gắn thẻ, đánh dấu sao, thùng rác, chia sẻ qua link có hạn |
-| Hỏi đáp AI | Hỏi trên một tài liệu, một thư mục, hoặc toàn bộ kho tài liệu |
-| Phiên hội thoại | Lưu lịch sử chat, có trí nhớ hội thoại nhiều lượt, trích dẫn nguồn từng câu trả lời |
-| Gói dịch vụ | Phân hạng Free/Basic/Pro, giới hạn dung lượng và hạn mức token, thanh toán qua VNPay |
-| Quản trị | Quản lý người dùng, khoá/mở tài khoản, quản lý gói dịch vụ |
+| Accounts | Registration with email OTP verification, login, Google sign-in, refresh tokens, password reset |
+| Document management | Upload, folders, tags, starring, trash, time-limited share links |
+| AI question answering | Ask against a single document, a whole folder, or the entire document library |
+| Chat sessions | Persisted chat history, multi-turn conversation memory, per-answer source citations |
+| Subscription plans | Free / Basic / Pro tiers with storage and token quotas, VNPay payment |
+| Administration | User management, account blocking, subscription plan management |
 
-## 2. Kiến trúc RAG
+## 2. RAG architecture
 
 ```text
-Tải lên  →  Azure Blob Storage
-              ↓
-          Bóc tách văn bản (PDFBox / Apache POI)
-              ↓
-          Chia đoạn (chunking)
-              ↓
-          Sinh vector  →  OpenAI text-embedding-3-small (1536 chiều)
-              ↓
-          Lưu vào bảng document_chunk
+Upload  →  Azure Blob Storage
+             ↓
+         Text extraction (PDFBox / Apache POI)
+             ↓
+         Chunking
+             ↓
+         Embedding  →  OpenAI text-embedding-3-small (1536 dimensions)
+             ↓
+         Stored in document_chunk
 
-Đặt câu hỏi  →  Sinh vector cho câu hỏi
-                    ↓
-                Tính cosine similarity, lấy TOP_K đoạn gần nhất
-                    ↓
-                Dựng prompt kèm ngữ cảnh  →  OpenAI gpt-5.6-luna
-                    ↓
-                Trả lời kèm trích dẫn nguồn
+Question  →  Embed the question
+                 ↓
+             Cosine similarity, retrieve TOP_K nearest chunks
+                 ↓
+             Build prompt with retrieved context  →  OpenAI gpt-5.6-luna
+                 ↓
+             Answer with source citations
 ```
 
-Hệ thống được cấu hình `rag.user-storage.allow-general-knowledge: false`, nghĩa là AI **chỉ
-được trả lời trong phạm vi tài liệu đã truy hồi**. Câu hỏi nằm ngoài tài liệu sẽ nhận phản
-hồi báo không tìm thấy thông tin, thay vì bịa ra câu trả lời.
+The system runs with `rag.user-storage.allow-general-knowledge: false`, meaning the AI may
+**only answer from retrieved document content**. Questions outside the document scope return
+an explicit "not found in this document" response rather than a fabricated answer.
 
-## 3. Công nghệ sử dụng
+## 3. Tech stack
 
-| Thành phần | Lựa chọn |
+| Component | Choice |
 | --- | --- |
-| Ngôn ngữ | Java 21 |
+| Language | Java 21 |
 | Framework | Spring Boot 4.0.6 |
-| Cơ sở dữ liệu | Microsoft SQL Server 16 |
+| Database | Microsoft SQL Server 16 |
 | ORM | Spring Data JPA, Hibernate 7 (`ddl-auto: validate`) |
-| Quản lý schema | Flyway |
-| Lưu trữ tệp | Azure Blob Storage, cấp quyền tạm bằng SAS token |
+| Schema migration | Flyway |
+| File storage | Azure Blob Storage with SAS tokens for temporary access |
 | AI | Spring AI 2.0 + OpenAI (`gpt-5.6-luna`, `text-embedding-3-small`) |
-| Bảo mật | Spring Security, JWT, OAuth2 (Google) |
-| Tài liệu API | SpringDoc OpenAPI (Swagger UI) |
-| Nạp biến môi trường | `springboot4-dotenv` (tự đọc `.env`) |
+| Security | Spring Security, JWT, OAuth2 (Google) |
+| API documentation | SpringDoc OpenAPI (Swagger UI) |
+| Environment loading | `springboot4-dotenv` (reads `.env` automatically) |
 
 ---
 
-## 4. Cài đặt và chạy
+## 4. Getting started
 
-### 4.1. Yêu cầu
+### 4.1. Prerequisites
 
-- **JDK 21** — kiểm tra bằng `.\mvnw.cmd -v`, dòng `Java version` phải là 21.x
-- **SQL Server** kèm SSMS hoặc Azure Data Studio
-- Maven Wrapper đã có sẵn trong repo, không cần cài Maven riêng
+- **JDK 21** — verify with `.\mvnw.cmd -v`; the `Java version` line must read 21.x
+- **SQL Server** with SSMS or Azure Data Studio
+- Maven Wrapper is included in the repository; no separate Maven installation needed
 
-Tuỳ chọn, chỉ cần khi dùng tới chức năng tương ứng:
+Optional, only required for the corresponding features:
 
-- **FFmpeg** trong PATH — bắt buộc nếu làm tính năng chuyển video thành văn bản
-- **Tesseract OCR** — nếu cần đọc chữ trong ảnh và PDF scan
-- **Docling** — nếu cần bóc tách tài liệu chất lượng cao hơn parser mặc định
+- **FFmpeg** on PATH — required for video-to-transcript
+- **Tesseract OCR** — for reading text from images and scanned PDFs
+- **Docling** — for higher quality document parsing than the built-in fallback
 
-### 4.2. Tạo cơ sở dữ liệu
+### 4.2. Create the database
 
-Mở SSMS và chạy script `doc/sql/setup_lms_ai.sql`. Script tạo database `lms_ai`, 21 bảng,
-khoá ngoại, ràng buộc, và dữ liệu khởi tạo gồm 3 gói cước cùng một tài khoản quản trị.
+Open SSMS and run `doc/sql/setup_lms_ai.sql`. The script creates the `lms_ai` database with
+21 tables, foreign keys, constraints, and seed data consisting of three subscription plans
+and one administrator account.
 
-> **Bắt buộc chạy trước khi khởi động ứng dụng.** Hibernate đang ở chế độ `validate` nên sẽ
-> từ chối khởi động nếu schema chưa tồn tại.
+> **Run this before starting the application.** Hibernate is configured with `validate`, so it
+> will refuse to start if the schema does not already exist.
 
-Script **không** tạo bảng `flyway_schema_history`. Đây là chủ ý: để Flyway tự tạo lúc ứng
-dụng chạy lần đầu, khi đó `baseline-on-migrate` sẽ ghi mốc khởi điểm rồi áp dụng V1 và V2.
+The script deliberately **does not** create the `flyway_schema_history` table. Flyway creates
+it on first startup, at which point `baseline-on-migrate` records a baseline and applies
+migrations V1 and V2.
 
-### 4.3. Cấu hình biến môi trường
+### 4.3. Configure environment variables
 
-Sao chép `.env.example` thành `.env` rồi điền giá trị. Dự án dùng `springboot4-dotenv` nên
-file này **được nạp tự động**, không cần script hay thao tác thủ công nào.
+Copy `.env.example` to `.env` and fill in the values. The project uses `springboot4-dotenv`,
+so this file is **loaded automatically** — no manual export or shell script required.
 
-Tối thiểu phải điền để ứng dụng khởi động được:
+Minimum required for the application to start:
 
 ```env
 SQLSERVER_DATASOURCE_URL=jdbc:sqlserver://localhost:1433;databaseName=lms_ai;encrypt=true;trustServerCertificate=true
 SQLSERVER_DATASOURCE_USERNAME=sa
-SQLSERVER_DATASOURCE_PASSWORD=<mật khẩu SQL Server>
-APP_JWT_SECRET=<chuỗi ngẫu nhiên tối thiểu 32 ký tự>
+SQLSERVER_DATASOURCE_PASSWORD=<your SQL Server password>
+APP_JWT_SECRET=<random string, at least 32 characters>
 ```
 
-Điền thêm khi cần chức năng tương ứng:
+Add these as you need the corresponding features:
 
-| Biến | Mở khoá chức năng |
+| Variable | Unlocks |
 | --- | --- |
-| `OPENAI_API_KEY` + `SPRING_AI_MODEL_CHAT=openai` + `SPRING_AI_MODEL_EMBEDDING=openai` | Hỏi đáp AI và tạo vector |
-| `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_STORAGE_CONTAINER` | Tải lên và tải xuống tài liệu |
-| `MAIL_USERNAME` + `MAIL_PASSWORD` | Gửi OTP đăng ký, quên mật khẩu |
-| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | Đăng nhập bằng Google |
-| `VNPAY_TMN_CODE` + `VNPAY_HASH_SECRET` | Thanh toán nâng gói |
+| `OPENAI_API_KEY` + `SPRING_AI_MODEL_CHAT=openai` + `SPRING_AI_MODEL_EMBEDDING=openai` | AI answering and embedding generation |
+| `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_STORAGE_CONTAINER` | Document upload and download |
+| `MAIL_USERNAME` + `MAIL_PASSWORD` | Registration OTP and password reset emails |
+| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | Google sign-in |
+| `VNPAY_TMN_CODE` + `VNPAY_HASH_SECRET` | Subscription upgrade payments |
 
-> ⚠️ **Cạm bẫy hay gặp: biến rỗng khác biến không tồn tại.**
-> Viết `TEN_BIEN=` trong `.env` tạo ra một biến **tồn tại với giá trị chuỗi rỗng**, và nó sẽ
-> **ghi đè** giá trị mặc định khai trong `${TEN_BIEN:mac_dinh}` của `application.yaml`.
-> Nếu chưa dùng tới một dịch vụ, hãy **xoá hẳn dòng đó** thay vì để trống.
+> ⚠️ **Common pitfall: an empty variable is not the same as a missing one.**
+> Writing `MY_VAR=` in `.env` creates a variable that **exists with an empty string value**, and
+> that empty value **overrides** the default declared in `${MY_VAR:default}` inside
+> `application.yaml`. If you are not using a service yet, **delete the line** rather than
+> leaving it blank.
 
-### 4.4. Chạy
+### 4.4. Run
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-Khởi động thành công sẽ thấy `Started Group01Application` và `Tomcat started on port 8080`.
+A successful start prints `Started Group01Application` and `Tomcat started on port 8080`.
 
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 
-Đăng nhập bằng tài khoản quản trị đã khởi tạo sẵn trong script SQL:
-`admin@aistudyhub.local` / `Admin@123`. **Đổi mật khẩu ngay sau lần đăng nhập đầu tiên.**
+Sign in with the administrator account seeded by the SQL script:
+`admin@aistudyhub.local` / `Admin@123`. **Change this password immediately after first login.**
 
 ---
 
-## 5. Quy ước cấu trúc code
+## 5. Code conventions
 
-### 5.1. Luồng xử lý
+### 5.1. Request flow
 
 ```text
 Controller  →  Service  →  Repository  →  Entity / Database
                        →  External Service (Azure Blob, OpenAI, Mail)
 ```
 
-Controller chỉ nhận request, gọi Service, trả response. Không viết business logic trong
-Controller.
+Controllers only accept the request, call a service, and return the response. No business
+logic in controllers.
 
-### 5.2. Trách nhiệm từng package
+### 5.2. Package responsibilities
 
-| Package | Trách nhiệm |
+| Package | Responsibility |
 | --- | --- |
-| `controller/` | Nhận request, gọi service, trả response |
-| `service/` | Toàn bộ business logic |
-| `repository/` | Thao tác database qua Spring Data JPA |
-| `entity/` | Chỉ mapping bảng, không chứa business logic |
-| `dto/` | Object request/response của API |
-| `config/` | Cấu hình database, Azure Storage, AI, security |
-| `exception/` | Xử lý lỗi tập trung |
-| `util/` | Hàm tiện ích dùng chung |
-| `enums/` | Các kiểu liệt kê dùng chung |
-| `security/` | JWT filter, handler cho OAuth2 |
+| `controller/` | Accept requests, call services, return responses |
+| `service/` | All business logic |
+| `repository/` | Database access through Spring Data JPA |
+| `entity/` | Table mapping only, no business logic |
+| `dto/` | API request and response objects |
+| `config/` | Database, Azure Storage, AI and security configuration |
+| `exception/` | Centralised error handling |
+| `util/` | Shared helpers with no heavy business logic |
+| `enums/` | Shared enumerations |
+| `security/` | JWT filter, OAuth2 handlers |
 
-### 5.3. Ví dụ đúng
+### 5.3. Good example
 
 ```text
 DocumentController
   → DocumentService
       → DocumentRepository
-      → FileStorageService      (interface, cài đặt bằng Azure Blob)
+      → FileStorageService      (interface, implemented by Azure Blob)
 ```
 
-### 5.4. Ví dụ nên tránh
+### 5.4. What to avoid
 
 ```text
 DocumentController
-  → tự validate file
-  → tự gọi SDK Azure
-  → tự lưu database
-  → tự xử lý lỗi chi tiết
+  → validates the file itself
+  → calls the Azure SDK directly
+  → saves to the database itself
+  → handles low-level errors itself
 ```
 
-Lưu trữ tệp luôn đi qua interface `FileStorageService`. Không gọi thẳng SDK của nhà cung cấp
-từ tầng controller hay service nghiệp vụ — đó là điều kiện để sau này đổi nhà cung cấp mà
-không phải sửa lan man.
+File storage always goes through the `FileStorageService` interface. Never call a provider SDK
+directly from a controller or a business service — that indirection is what makes switching
+storage providers a contained change rather than a rewrite.
 
-### 5.5. Chuẩn response
+### 5.5. Response format
 
-Thành công:
+Success:
 
 ```json
 {
@@ -196,7 +199,7 @@ Thành công:
 }
 ```
 
-Thất bại:
+Failure:
 
 ```json
 {
@@ -208,99 +211,100 @@ Thất bại:
 }
 ```
 
-### 5.6. Quy tắc bắt buộc
+### 5.6. Hard rules
 
-- **Không commit** `.env`, API key, mật khẩu database, connection string hay bất kỳ secret nào
-- Không lưu nội dung tệp vào database — tệp vật lý nằm ở storage, database chỉ giữ metadata
-- Thêm endpoint mới thì đặt tên đúng chuẩn RESTful
-- Thêm field vào entity thì kiểm tra ảnh hưởng tới migration, DTO, repository và response
-- Không sửa module ngoài phạm vi task nếu chưa trao đổi với nhóm
+- **Never commit** `.env`, API keys, database passwords, connection strings or any secret
+- Never store file contents in the database — physical files live in blob storage, the database
+  holds metadata only
+- New endpoints must follow RESTful naming
+- Adding a field to an entity means checking the impact on migrations, DTOs, repositories and
+  API responses
+- Do not modify modules outside your task without discussing it with the team first
 
 ---
 
-## 6. Quy trình Git
+## 6. Git workflow
 
-Không code trực tiếp trên `main`. Mỗi task một branch riêng, xong thì tạo Pull Request để
-người khác review trước khi merge.
+Never commit directly to `main`. One branch per task, then open a Pull Request for review
+before merging.
 
 ```bash
-# Bắt đầu task mới
+# Starting a new task
 git checkout main
 git pull origin main
-git checkout -b feature/ten-chuc-nang
+git checkout -b feature/your-feature-name
 
-# Trong lúc làm
+# While working
 git add .
 git commit -m "feat(chat): add session message endpoint"
 
-# Đẩy lên và tạo Pull Request
-git push -u origin feature/ten-chuc-nang
+# Push and open a Pull Request
+git push -u origin feature/your-feature-name
 ```
 
-Quy ước tên branch: `feature/`, `fix/`, `refactor/`, `docs/` kèm mô tả ngắn bằng tiếng Anh
-không dấu.
+Branch naming: `feature/`, `fix/`, `refactor/`, `docs/` followed by a short English description.
 
-### Quy ước commit
+### Commit convention
 
-Theo chuẩn **Conventional Commits**: `type(scope): description`
+**Conventional Commits**: `type(scope): description`
 
-| Type | Dùng khi |
+| Type | Use when |
 | --- | --- |
-| `feat` | Thêm chức năng mới |
-| `fix` | Sửa lỗi |
-| `refactor` | Cấu trúc lại code, không đổi hành vi |
-| `docs` | Sửa tài liệu |
-| `test` | Thêm hoặc sửa test |
-| `chore` | Cấu hình, dependency, việc phụ trợ |
-| `build` | Thay đổi build tool |
-| `perf` | Cải thiện hiệu năng |
+| `feat` | Adding a new feature |
+| `fix` | Fixing a bug |
+| `refactor` | Restructuring code without changing behaviour |
+| `docs` | Documentation changes |
+| `test` | Adding or updating tests |
+| `chore` | Configuration, dependencies, housekeeping |
+| `build` | Build tooling changes |
+| `perf` | Performance improvements |
 
-Scope thường dùng: `auth`, `chat`, `upload`, `document`, `user`, `admin`, `db`, `config`.
+Common scopes: `auth`, `chat`, `upload`, `document`, `user`, `admin`, `db`, `config`.
 
-Ba quy tắc: mô tả bằng tiếng Anh, không viết hoa chữ đầu, không chấm cuối câu. Mỗi commit
-tập trung một việc.
+Three rules: write the description in English, do not capitalise the first word, do not end
+with a period. Keep each commit focused on one thing.
 
 ```bash
-# Nên
+# Good
 git commit -m "feat(upload): validate file size before upload"
 git commit -m "fix(auth): return 401 when refresh token expired"
 
-# Không nên
+# Bad
 git commit -m "update"
 git commit -m "fix bug"
 ```
 
-### Xử lý conflict
+### Resolving conflicts
 
 ```bash
 git checkout main
 git pull origin main
-git checkout feature/ten-chuc-nang
+git checkout feature/your-feature-name
 git merge main
-# sửa các file conflict, rồi:
+# resolve the conflicting files, then:
 git add .
 git commit -m "chore(merge): resolve conflict with main"
 git push
 ```
 
-Không chắc cách xử lý thì hỏi nhóm trước khi sửa, đừng tự ý ghi đè.
+If you are unsure how to resolve a conflict, ask the team before overwriting anything.
 
 ---
 
-## 7. Tài liệu liên quan
+## 7. Related documentation
 
-| Tài liệu | Nội dung |
+| Document | Contents |
 | --- | --- |
-| `API_CONTRACT.md` | Hợp đồng API đầy đủ cho frontend |
-| `doc/sql/setup_lms_ai.sql` | Script dựng database kèm dữ liệu khởi tạo |
-| `doc/GIAI_THICH_CAU_HINH.md` | Giải thích từng tham số trong `.env` và `application.yaml` |
-| `doc/TON_DONG_VA_PHAT_HIEN.md` | Danh sách tồn đọng và các phát hiện kỹ thuật |
+| `API_CONTRACT.md` | Full API contract for the frontend |
+| `doc/sql/setup_lms_ai.sql` | Database setup script with seed data |
+| `doc/GIAI_THICH_CAU_HINH.md` | Reference for every `.env` and `application.yaml` parameter (Vietnamese) |
+| `doc/TON_DONG_VA_PHAT_HIEN.md` | Outstanding work and technical findings (Vietnamese) |
 
-## 8. Ghi chú
+## 8. Notes
 
-Package Java hiện vẫn là `com.se1908.group01`, kế thừa từ cấu trúc ban đầu của dự án. Đổi
-tên package sẽ ảnh hưởng toàn bộ 244 file nguồn nên chưa thực hiện.
+The Java package is still `com.se1908.group01`, inherited from the project's original
+structure. Renaming it would touch all 244 source files, so it has not been done.
 
-Tài khoản quản trị khởi tạo dùng địa chỉ `admin@aistudyhub.local`. Đây là giá trị được ghi
-trong `doc/sql/setup_lms_ai.sql`; muốn đổi thì sửa cả script lẫn dữ liệu đã tạo trong
-database.
+The seeded administrator account uses `admin@aistudyhub.local`. This value lives in
+`doc/sql/setup_lms_ai.sql`; changing it requires updating both the script and any database
+already created from it.
