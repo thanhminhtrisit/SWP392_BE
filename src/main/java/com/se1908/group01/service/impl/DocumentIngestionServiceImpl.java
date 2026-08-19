@@ -3,7 +3,7 @@ package com.se1908.group01.service.impl;
 import com.se1908.group01.dto.ChunkData;
 import com.se1908.group01.entity.Document;
 import com.se1908.group01.entity.DocumentChunk;
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.exception.DoclingUnavailableException;
 import com.se1908.group01.repository.DocumentChunkRepository;
 import com.se1908.group01.repository.DocumentRepository;

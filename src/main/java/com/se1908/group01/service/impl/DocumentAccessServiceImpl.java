@@ -1,7 +1,7 @@
 package com.se1908.group01.service.impl;
 
 import com.se1908.group01.entity.Document;
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.exception.ResourceNotFoundException;
 import com.se1908.group01.repository.DocumentFolderRepository;
 import com.se1908.group01.repository.DocumentRepository;

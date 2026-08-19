@@ -1,8 +1,9 @@
 package com.se1908.group01.repository;
 
 import com.se1908.group01.entity.DocumentChunk;
-import com.se1908.group01.entity.DocumentStatus;
 import java.util.List;
+
+import com.se1908.group01.enums.DocumentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

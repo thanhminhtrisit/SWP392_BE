@@ -1,6 +1,6 @@
 package com.se1908.group01.service.impl;
 
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.repository.DocumentRepository;
 import com.se1908.group01.service.DocumentIngestionJobService;
 import com.se1908.group01.service.DocumentIngestionService;

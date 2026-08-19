@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rniE \"\\(password|secret|api[_-]?key|token\\)\\\\s*=\\\\s*\\\\\"[A-Za-z0-9]{8,}\\\\\"\" src/main/java)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.BlobClient)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.specialized.BlobClientBase)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.sas.BlobServiceSasSignatureValues com.azure.storage.blob.sas.BlobSasPermission com.azure.storage.blob.options.BlobParallelUploadOptions)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.options.BlobParallelUploadOptions)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.BlobContainerClientBuilder)",
+      "Bash(javap -cp azure-storage-blob-12.33.2.jar com.azure.storage.blob.models.BlobStorageException)",
+      "Bash(./mvnw.cmd -q dependency:get -Dartifact=com.azure:azure-storage-blob:12.35.0)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(./mvnw.cmd clean *)",
+      "Bash(python3 -)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}

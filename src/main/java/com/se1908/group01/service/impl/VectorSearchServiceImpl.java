@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.se1908.group01.dto.RetrievedChunk;
 import com.se1908.group01.entity.DocumentChunk;
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.repository.DocumentChunkRepository;
 import com.se1908.group01.service.VectorSearchService;
 import java.util.Comparator;
