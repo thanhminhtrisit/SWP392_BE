@@ -1566,6 +1566,185 @@ Status: `200 OK`
 
 ---
 
+## 3.7.2. Get document share approvals (admin)
+
+Get paginated document approvals for admin review.
+
+### Request
+
+- Method: `GET`
+- URL: `/api/documents/document-share-approvals`
+- Auth: JWT required (ADMIN role)
+
+### Query params
+
+| Name       | Type                                | Required | Default             | Example                |
+| ---------- | ----------------------------------- | -------- | ------------------- | ---------------------- |
+| `status`   | `ShareApprovalStatus`              | No       | `PENDING_APPROVAL`  | `PENDING_APPROVAL`     |
+| `shareType`| `DocumentShareApprovalType` / null | No       | `null`              | `PUBLIC`               |
+| `page`     | number                             | No       | `0`                 | `0`                    |
+| `size`     | number                             | No       | Spring default size | `10`                   |
+| `sort`     | string                             | No       | `createdAt,asc`     | `createdAt,asc`        |
+
+### Enum values
+
+`ShareApprovalStatus`:
+
+- `UNREVIEWED`
+- `PENDING_APPROVAL`
+- `APPROVED`
+- `REJECTED`
+
+`DocumentShareApprovalType`:
+
+- `PUBLIC`
+- `LINK`
+- `DIRECT`
+
+### Example request
+
+```text
+GET /api/documents/document-share-approvals?status=PENDING_APPROVAL&shareType=PUBLIC&page=0&size=10&sort=createdAt,asc
+```
+
+### Success response
+
+Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Get document share approvals successfully",
+  "data": {
+    "content": [
+      {
+        "approvalId": 15,
+        "documentId": 123,
+        "documentName": "policy.pdf",
+        "ownerId": 5,
+        "ownerEmail": "owner@example.com",
+        "shareType": "PUBLIC",
+        "status": "PENDING_APPROVAL",
+        "createdAt": "2026-08-19T08:30:00Z",
+        "updatedAt": "2026-08-19T08:30:00Z"
+      }
+    ],
+    "pageable": {
+      "pageNumber": 0,
+      "pageSize": 10
+    },
+    "totalElements": 1,
+    "totalPages": 1,
+    "first": true,
+    "last": true,
+    "number": 0,
+    "size": 10,
+    "empty": false
+  },
+  "errors": null,
+  "timestamp": "2026-08-19T08:30:00Z"
+}
+```
+
+### Approval item fields
+
+| Field         | Type                  | Description |
+| ------------- | --------------------- | ----------- |
+| `approvalId`  | number                | Approval row ID |
+| `documentId`  | number                | Document ID |
+| `documentName`| string                | Original file name |
+| `ownerId`     | number                | Owner user ID |
+| `ownerEmail`  | string / null         | Owner email |
+| `shareType`   | `DocumentShareApprovalType` | Share approval type |
+| `status`      | `ShareApprovalStatus` | Current approval status |
+| `createdAt`   | string (ISO datetime) | Creation timestamp |
+| `updatedAt`   | string (ISO datetime) | Last update timestamp |
+
+### Error cases
+
+| Status | Message | Reason |
+|---|---|---|
+| `400` | `Validation failed` or specific validation message | Invalid enum/query format, or bad request parameters |
+| `401` | `Unauthorized` | Missing or invalid JWT |
+| `403` | `Forbidden` | Authenticated user is not allowed to access admin APIs |
+| `500` | `Request failed` | Unexpected server error |
+
+---
+
+## 3.7.3. Review document share approval (admin)
+
+Approve or reject pending approval records of one document.
+
+### Request
+
+- Method: `PATCH`
+- URL: `/api/documents/{documentId}/share-approval?status=APPROVED`
+- Auth: JWT required (ADMIN role)
+
+### Path variables
+
+| Name         | Type   | Required |
+| ------------ | ------ | -------- |
+| `documentId` | number | Yes      |
+
+### Query params
+
+| Name     | Type                  | Required | Allowed values |
+| -------- | --------------------- | -------- | -------------- |
+| `status` | `ShareApprovalStatus` | Yes      | `APPROVED`, `REJECTED` |
+
+### Example requests
+
+```text
+PATCH /api/documents/123/share-approval?status=APPROVED
+PATCH /api/documents/123/share-approval?status=REJECTED
+```
+
+### Success response
+
+Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Review document share approval successfully",
+  "data": {
+    "documentId": 123,
+    "userId": 5,
+    "ownerEmail": "owner@example.com",
+    "folderId": null,
+    "originalFileName": "policy.pdf",
+    "s3Key": "documents/5/policy.pdf",
+    "contentType": "application/pdf",
+    "fileSize": 209715,
+    "isPublic": true,
+    "isDeleted": false,
+    "isStarred": false,
+    "status": "READY",
+    "shareApprovalStatus": "APPROVED",
+    "uploadedAt": "2026-08-18T10:00:00Z",
+    "deletedAt": null
+  },
+  "errors": null,
+  "timestamp": "2026-08-19T08:45:00Z"
+}
+```
+
+### Error cases
+
+| Status | Message | Reason |
+|---|---|---|
+| `400` | `Approval status is required` | Missing `status` query parameter |
+| `400` | `Approval status must be APPROVED or REJECTED` | Unsupported status value |
+| `400` | `Only admin can review document approval` | Non-admin attempted review |
+| `400` | `Document is deleted` | Cannot review deleted document |
+| `400` | `Document is not pending admin approval` | No pending approvals found for document |
+| `401` | `Unauthorized` | Missing or invalid JWT |
+| `403` | `Forbidden` | Access denied by security rules |
+| `404` | `Document not found` | Document ID does not exist |
+
+---
+
 ## 3.8. Move document to Trash
 
 Soft-delete a document. The physical file is not deleted from S3.
