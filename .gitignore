@@ -50,3 +50,8 @@ docs/*
 REPORT_SYSTEM_API_SUMMARY.md
 CONVERSATION_HANDOFF.md
 MANUAL_TEST_CASES.md
+
+.claude
+API_CONTRACT.md
+group01.iml
+.env.example
