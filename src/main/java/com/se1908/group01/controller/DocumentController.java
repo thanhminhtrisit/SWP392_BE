@@ -1,6 +1,7 @@
 package com.se1908.group01.controller;
 
 import com.se1908.group01.dto.ApiResponse;
+import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
 import com.se1908.group01.dto.DocumentPageResponse;
 import com.se1908.group01.dto.DocumentShareLinkResponse;
 import com.se1908.group01.dto.DocumentShareResponse;
@@ -9,6 +10,8 @@ import com.se1908.group01.dto.DocumentRenameRequest;
 import com.se1908.group01.dto.DocumentUploadResponse;
 import com.se1908.group01.dto.FileAccessUrlResponse;
 import com.se1908.group01.dto.ShareDocumentWithUserRequest;
+import com.se1908.group01.enums.ShareApprovalStatus;
+import com.se1908.group01.enums.DocumentShareApprovalType;
 import com.se1908.group01.exception.FileStorageException;
 import com.se1908.group01.service.DocumentService;
 import jakarta.validation.Valid;
@@ -27,6 +30,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -290,6 +296,28 @@ public class DocumentController {
 	) {
 		var response = documentService.updateVisibility(documentId, isPublic);
 		return ApiResponse.success("Update document visibility successfully", response);
+	}
+
+	@GetMapping("/document-share-approvals")
+	public ApiResponse<Page<AdminDocumentShareApprovalResponse>> getApprovals(
+			@RequestParam(defaultValue = "PENDING_APPROVAL") ShareApprovalStatus status,
+			@RequestParam(required = false) DocumentShareApprovalType shareType,
+			@PageableDefault(sort = "createdAt", direction = Sort.Direction.ASC)
+			Pageable pageable
+	) {
+		return ApiResponse.success(
+				"Get document share approvals successfully",
+				documentService.getDocumentShareApprovals(status, shareType, pageable)
+		);
+	}
+
+	@PatchMapping("/{documentId}/share-approval")
+	public ApiResponse<DocumentUploadResponse> reviewShareApproval(
+			@PathVariable Long documentId,
+			@RequestParam("status") ShareApprovalStatus status
+	) {
+		var response = documentService.reviewShareApproval(documentId, status);
+		return ApiResponse.success("Review document share approval successfully", response);
 	}
 
 	@PatchMapping("/{documentId}/star")

@@ -1,13 +1,17 @@
 package com.se1908.group01.service;
 
 import com.se1908.group01.dto.DocumentUploadResponse;
+import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
 import com.se1908.group01.dto.DocumentPageResponse;
 import com.se1908.group01.dto.DocumentShareLinkResponse;
 import com.se1908.group01.dto.DocumentShareResponse;
 import com.se1908.group01.dto.FileAccessUrlResponse;
+import com.se1908.group01.enums.ShareApprovalStatus;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface DocumentService {
@@ -95,6 +99,14 @@ public interface DocumentService {
 	DocumentUploadResponse saveSharedWithMeDocumentToMyFiles(Long documentId, Long folderId);
 
 	DocumentUploadResponse updateVisibility(Long documentId, Boolean isPublic);
+
+	DocumentUploadResponse reviewShareApproval(Long documentId, ShareApprovalStatus status);
+
+	Page<AdminDocumentShareApprovalResponse> getDocumentShareApprovals(
+			ShareApprovalStatus status,
+			com.se1908.group01.enums.DocumentShareApprovalType shareType,
+			Pageable pageable
+	);
 
 	DocumentUploadResponse updateStarred(Long documentId, Boolean isStarred);
 

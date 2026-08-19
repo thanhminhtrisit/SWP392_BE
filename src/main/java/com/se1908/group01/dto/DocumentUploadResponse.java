@@ -1,6 +1,7 @@
 package com.se1908.group01.dto;
 
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
+import com.se1908.group01.enums.ShareApprovalStatus;
 import java.time.Instant;
 
 /**
@@ -20,6 +21,7 @@ public class DocumentUploadResponse {
 	private Boolean isDeleted;
 	private Boolean isStarred;
 	private DocumentStatus status;
+	private ShareApprovalStatus shareApprovalStatus;
 	private Instant uploadedAt;
 	private Instant deletedAt;
 
@@ -117,6 +119,14 @@ public class DocumentUploadResponse {
 
 	public void setStatus(DocumentStatus status) {
 		this.status = status;
+	}
+
+	public ShareApprovalStatus getShareApprovalStatus() {
+		return shareApprovalStatus;
+	}
+
+	public void setShareApprovalStatus(ShareApprovalStatus shareApprovalStatus) {
+		this.shareApprovalStatus = shareApprovalStatus;
 	}
 
 	public Instant getUploadedAt() {

@@ -1,7 +1,7 @@
 package com.se1908.group01.repository;
 
 import com.se1908.group01.entity.Document;
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Modifying;

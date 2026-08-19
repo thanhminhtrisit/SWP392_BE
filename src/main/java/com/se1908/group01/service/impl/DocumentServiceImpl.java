@@ -2,6 +2,7 @@ package com.se1908.group01.service.impl;
 
 import com.se1908.group01.config.AzureStorageProperties;
 import com.se1908.group01.dto.DocumentPageResponse;
+import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
 import com.se1908.group01.dto.DocumentShareLinkResponse;
 import com.se1908.group01.dto.DocumentShareResponse;
 import com.se1908.group01.dto.DocumentUploadResponse;
@@ -9,14 +10,18 @@ import com.se1908.group01.dto.FileAccessUrlResponse;
 import com.se1908.group01.entity.Document;
 import com.se1908.group01.entity.DocumentChunk;
 import com.se1908.group01.entity.DocumentShare;
+import com.se1908.group01.entity.DocumentShareApproval;
+import com.se1908.group01.enums.DocumentShareApprovalType;
 import com.se1908.group01.entity.DocumentShareLink;
-import com.se1908.group01.entity.DocumentStatus;
+import com.se1908.group01.enums.DocumentStatus;
+import com.se1908.group01.enums.ShareApprovalStatus;
 import com.se1908.group01.entity.User;
 import com.se1908.group01.exception.ResourceNotFoundException;
 import com.se1908.group01.repository.ChatSessionDocumentRepository;
 import com.se1908.group01.repository.DocumentChunkRepository;
 import com.se1908.group01.repository.DocumentFolderRepository;
 import com.se1908.group01.repository.DocumentRepository;
+import com.se1908.group01.repository.DocumentShareApprovalRepository;
 import com.se1908.group01.repository.DocumentShareLinkRepository;
 import com.se1908.group01.repository.DocumentShareRepository;
 import com.se1908.group01.repository.DocumentTagRepository;
@@ -31,6 +36,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -74,6 +81,7 @@ public class DocumentServiceImpl implements DocumentService {
 	private final DocumentChunkRepository documentChunkRepository;
 	private final DocumentTagRepository documentTagRepository;
 	private final DocumentIngestionService documentIngestionService;
+	private final DocumentShareApprovalRepository documentShareApprovalRepository;
 	private final DocumentShareLinkRepository documentShareLinkRepository;
 	private final DocumentShareRepository documentShareRepository;
 	private final FriendshipRepository friendshipRepository;
@@ -92,6 +100,7 @@ public class DocumentServiceImpl implements DocumentService {
 			DocumentChunkRepository documentChunkRepository,
 			DocumentTagRepository documentTagRepository,
 			DocumentIngestionService documentIngestionService,
+			DocumentShareApprovalRepository documentShareApprovalRepository,
 			DocumentShareLinkRepository documentShareLinkRepository,
 			DocumentShareRepository documentShareRepository,
 			FriendshipRepository friendshipRepository,
@@ -109,6 +118,7 @@ public class DocumentServiceImpl implements DocumentService {
 		this.documentChunkRepository = documentChunkRepository;
 		this.documentTagRepository = documentTagRepository;
 		this.documentIngestionService = documentIngestionService;
+		this.documentShareApprovalRepository = documentShareApprovalRepository;
 		this.documentShareLinkRepository = documentShareLinkRepository;
 		this.documentShareRepository = documentShareRepository;
 		this.friendshipRepository = friendshipRepository;
@@ -162,6 +172,7 @@ public class DocumentServiceImpl implements DocumentService {
 			doc.setFileSize(file.getSize());
 			doc.setIsPublic(Boolean.TRUE.equals(isPublic));
 			doc.setStatus(DocumentStatus.UPLOADED);
+			doc.setShareApprovalStatus(ShareApprovalStatus.UNREVIEWED);
 
 			doc = documentRepository.save(doc);
 			// MultipartFile chỉ thuộc request, nên copy xuống disk cho async ingestion worker.
@@ -263,6 +274,7 @@ public class DocumentServiceImpl implements DocumentService {
 	public List<DocumentUploadResponse> getPublicDocuments() {
 		return documentRepository.findByIsPublicTrueAndIsDeletedFalseOrderByUploadedAtDesc()
 				.stream()
+				.filter(doc -> doc.getShareApprovalStatus() == ShareApprovalStatus.APPROVED)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -406,6 +418,8 @@ public class DocumentServiceImpl implements DocumentService {
 			link.setEnabled(Boolean.FALSE);
 			documentShareLinkRepository.save(link);
 		});
+
+		setApprovalStatusForType(doc, DocumentShareApprovalType.LINK, ShareApprovalStatus.PENDING_APPROVAL);
 
 		var shareLink = new DocumentShareLink();
 		shareLink.setDocument(doc);
@@ -573,6 +587,8 @@ public class DocumentServiceImpl implements DocumentService {
 			throw new IllegalArgumentException("Document is already shared with this user");
 		}
 
+		setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
+
 		var documentShare = new DocumentShare();
 		documentShare.setDocument(doc);
 		documentShare.setOwnerId(ownerId);
@@ -631,6 +647,7 @@ public class DocumentServiceImpl implements DocumentService {
 				.stream()
 				.map(DocumentShare::getDocument)
 				.filter(doc -> !Boolean.TRUE.equals(doc.getIsDeleted()))
+				.filter(doc -> doc.getShareApprovalStatus() == ShareApprovalStatus.APPROVED)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -806,7 +823,86 @@ public class DocumentServiceImpl implements DocumentService {
 		var userId = currentUserService.getCurrentUserId();
 		var doc = findOwnedActiveDocument(userId, documentId);
 		doc.setIsPublic(isPublic);
+		if (Boolean.TRUE.equals(isPublic)) {
+			setApprovalStatusForType(doc, DocumentShareApprovalType.PUBLIC, ShareApprovalStatus.PENDING_APPROVAL);
+		} else {
+			clearApprovalStatusForType(doc, DocumentShareApprovalType.PUBLIC);
+		}
 		return toResponse(documentRepository.save(doc));
+	}
+
+	@Transactional
+	@Override
+	public DocumentUploadResponse reviewShareApproval(Long documentId, ShareApprovalStatus status) {
+		if (status == null) {
+			throw new IllegalArgumentException("Approval status is required");
+		}
+		if (status != ShareApprovalStatus.APPROVED && status != ShareApprovalStatus.REJECTED) {
+			throw new IllegalArgumentException("Approval status must be APPROVED or REJECTED");
+		}
+
+		var adminUserId = currentUserService.getCurrentUserId();
+		var adminUser = userRepository.findById(adminUserId)
+				.orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+		if (adminUser.getRole() != com.se1908.group01.enums.Role.ADMIN) {
+			throw new IllegalArgumentException("Only admin can review document approval");
+		}
+
+		var doc = documentRepository.findById(documentId)
+				.orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+		if (Boolean.TRUE.equals(doc.getIsDeleted())) {
+			throw new IllegalArgumentException("Document is deleted");
+		}
+
+		var pendingApprovals = documentShareApprovalRepository.findByDocument_DocumentId(documentId).stream()
+				.filter(approval -> approval.getStatus() == ShareApprovalStatus.PENDING_APPROVAL)
+				.toList();
+		if (pendingApprovals.isEmpty()) {
+			throw new IllegalArgumentException("Document is not pending admin approval");
+		}
+
+		for (var approval : pendingApprovals) {
+			approval.setStatus(status);
+			documentShareApprovalRepository.save(approval);
+		}
+
+		doc.setShareApprovalStatus(resolveAggregateShareApprovalStatus(doc));
+		return toResponse(documentRepository.save(doc));
+	}
+
+	@Transactional(readOnly = true)
+	@Override
+	public Page<AdminDocumentShareApprovalResponse> getDocumentShareApprovals(
+			ShareApprovalStatus status,
+			DocumentShareApprovalType shareType,
+			Pageable pageable
+	) {
+		if (status == null) {
+			throw new IllegalArgumentException("Approval status is required");
+		}
+		assertAdmin();
+
+		var approvals = shareType == null
+				? documentShareApprovalRepository.findByStatus(status, pageable)
+				: documentShareApprovalRepository.findByStatusAndShareType(status, shareType, pageable);
+
+		return approvals.map(approval -> {
+			var document = approval.getDocument();
+			var ownerEmail = userRepository.findById(document.getUserId())
+					.map(User::getEmail)
+					.orElse(null);
+			return new AdminDocumentShareApprovalResponse(
+					approval.getDocumentShareApprovalId(),
+					document.getDocumentId(),
+					document.getOriginalFileName(),
+					document.getUserId(),
+					ownerEmail,
+					approval.getShareType(),
+					approval.getStatus(),
+					approval.getCreatedAt(),
+					approval.getUpdatedAt()
+			);
+		});
 	}
 
 	@Transactional
@@ -1016,8 +1112,10 @@ public class DocumentServiceImpl implements DocumentService {
 		if (documentId == null) {
 			throw new IllegalArgumentException("documentId is required");
 		}
-		return documentRepository.findByDocumentIdAndIsPublicTrueAndIsDeletedFalse(documentId)
+		var doc = documentRepository.findByDocumentIdAndIsPublicTrueAndIsDeletedFalse(documentId)
 				.orElseThrow(() -> new ResourceNotFoundException("Public document not found"));
+		assertApprovedForDisplay(doc);
+		return doc;
 	}
 
 	private Document findDocumentByShareLink(String token) {
@@ -1035,6 +1133,7 @@ public class DocumentServiceImpl implements DocumentService {
 		if (Boolean.TRUE.equals(doc.getIsDeleted())) {
 			throw new ResourceNotFoundException("Shared document not found");
 		}
+		assertApprovedForDisplay(doc);
 		return doc;
 	}
 
@@ -1050,7 +1149,78 @@ public class DocumentServiceImpl implements DocumentService {
 		if (Boolean.TRUE.equals(doc.getIsDeleted())) {
 			throw new ResourceNotFoundException("Shared document not found");
 		}
+		assertApprovedForDisplay(doc);
 		return doc;
+	}
+
+	private void assertApprovedForDisplay(Document doc) {
+		if (doc == null) {
+			throw new ResourceNotFoundException("Document not found");
+		}
+		if (doc.getShareApprovalStatus() != ShareApprovalStatus.APPROVED) {
+			throw new ResourceNotFoundException("Document is not approved for public sharing");
+		}
+	}
+
+	private void setApprovalStatusForType(Document doc, DocumentShareApprovalType approvalType, ShareApprovalStatus status) {
+		if (doc == null || approvalType == null || status == null) {
+			return;
+		}
+		if (doc.getDocumentId() == null) {
+			throw new IllegalArgumentException("Document id is required");
+		}
+
+		var approval = documentShareApprovalRepository
+				.findByDocument_DocumentIdAndShareType(doc.getDocumentId(), approvalType)
+				.orElseGet(() -> {
+					var newApproval = new DocumentShareApproval();
+					newApproval.setDocument(doc);
+					newApproval.setShareType(approvalType);
+					return newApproval;
+				});
+		approval.setStatus(status);
+		documentShareApprovalRepository.save(approval);
+
+		doc.setShareApprovalStatus(resolveAggregateShareApprovalStatus(doc));
+		documentRepository.save(doc);
+	}
+
+	private void clearApprovalStatusForType(Document doc, DocumentShareApprovalType approvalType) {
+		if (doc == null || approvalType == null) {
+			return;
+		}
+		if (doc.getDocumentId() == null) {
+			return;
+		}
+
+		documentShareApprovalRepository.findByDocument_DocumentIdAndShareType(doc.getDocumentId(), approvalType)
+				.ifPresent(existing -> {
+					existing.setStatus(ShareApprovalStatus.UNREVIEWED);
+					documentShareApprovalRepository.save(existing);
+				});
+
+		doc.setShareApprovalStatus(resolveAggregateShareApprovalStatus(doc));
+		documentRepository.save(doc);
+	}
+
+	private ShareApprovalStatus resolveAggregateShareApprovalStatus(Document doc) {
+		if (doc == null) {
+			return ShareApprovalStatus.UNREVIEWED;
+		}
+		var approvals = documentShareApprovalRepository.findByDocument_DocumentId(doc.getDocumentId());
+		if (approvals == null || approvals.isEmpty()) {
+			return doc.getShareApprovalStatus() != null ? doc.getShareApprovalStatus() : ShareApprovalStatus.UNREVIEWED;
+		}
+		if (approvals.stream().anyMatch(item -> item.getStatus() == ShareApprovalStatus.PENDING_APPROVAL)) {
+			return ShareApprovalStatus.PENDING_APPROVAL;
+		}
+		if (approvals.stream().anyMatch(item -> item.getStatus() == ShareApprovalStatus.REJECTED)) {
+			return ShareApprovalStatus.REJECTED;
+		}
+		if (approvals.stream().anyMatch(item -> item.getStatus() == ShareApprovalStatus.APPROVED)) {
+			return ShareApprovalStatus.APPROVED;
+		}
+		return ShareApprovalStatus.UNREVIEWED;
 	}
 
 	private boolean isExpired(DocumentShareLink shareLink) {
@@ -1068,6 +1238,15 @@ public class DocumentServiceImpl implements DocumentService {
 	private void validateUserId(Long userId) {
 		if (userId == null) {
 			throw new IllegalArgumentException("userId is required");
+		}
+	}
+
+	private void assertAdmin() {
+		var userId = currentUserService.getCurrentUserId();
+		var user = userRepository.findById(userId)
+				.orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+		if (user.getRole() != com.se1908.group01.enums.Role.ADMIN) {
+			throw new IllegalArgumentException("Only admin can view document approvals");
 		}
 	}
 
@@ -1133,6 +1312,7 @@ public class DocumentServiceImpl implements DocumentService {
 		res.setIsDeleted(doc.getIsDeleted());
 		res.setIsStarred(doc.getIsStarred());
 		res.setStatus(doc.getStatus());
+		res.setShareApprovalStatus(doc.getShareApprovalStatus());
 		res.setUploadedAt(doc.getUploadedAt());
 		res.setDeletedAt(doc.getDeletedAt());
 		return res;

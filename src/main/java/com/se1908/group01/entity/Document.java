@@ -1,5 +1,7 @@
 package com.se1908.group01.entity;
 
+import com.se1908.group01.enums.DocumentStatus;
+import com.se1908.group01.enums.ShareApprovalStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -69,6 +71,10 @@ public class Document {
 	@Column(name = "status", nullable = false, length = 32)
 	private DocumentStatus status = DocumentStatus.UPLOADED;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "share_approval_status", nullable = false, length = 32)
+	private ShareApprovalStatus shareApprovalStatus = ShareApprovalStatus.UNREVIEWED;
+
 	@Column(name = "uploaded_at", nullable = false)
 	private Instant uploadedAt;
 
@@ -80,6 +86,9 @@ public class Document {
 		}
 		if (status == null) {
 			status = DocumentStatus.UPLOADED;
+		}
+		if (shareApprovalStatus == null) {
+			shareApprovalStatus = ShareApprovalStatus.UNREVIEWED;
 		}
 		if (isDeleted == null) {
 			isDeleted = Boolean.FALSE;
@@ -183,6 +192,14 @@ public class Document {
 
 	public void setStatus(DocumentStatus status) {
 		this.status = status;
+	}
+
+	public ShareApprovalStatus getShareApprovalStatus() {
+		return shareApprovalStatus;
+	}
+
+	public void setShareApprovalStatus(ShareApprovalStatus shareApprovalStatus) {
+		this.shareApprovalStatus = shareApprovalStatus;
 	}
 
 	public Instant getUploadedAt() {
