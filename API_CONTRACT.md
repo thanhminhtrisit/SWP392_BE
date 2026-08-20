@@ -1742,8 +1742,94 @@ Status: `200 OK`
 | `401` | `Unauthorized` | Missing or invalid JWT |
 | `403` | `Forbidden` | Access denied by security rules |
 | `404` | `Document not found` | Document ID does not exist |
-
 ---
+
+## 3.7.4. Get my document share approvals
+
+Get paginated share approval records for documents owned by the authenticated user.
+
+### Request
+
+- Method: `GET`
+- URL: `/api/documents/my/document-share-approvals`
+- Auth: JWT required
+
+### Query params
+
+| Name       | Type                                | Required | Default             | Example                |
+| ---------- | ----------------------------------- | -------- | ------------------- | ---------------------- |
+| `status`   | `ShareApprovalStatus` / null       | No       | `null`              | `PENDING_APPROVAL`     |
+| `shareType`| `DocumentShareApprovalType` / null | No       | `null`              | `PUBLIC`               |
+| `page`     | number                             | No       | `0`                 | `0`                    |
+| `size`     | number                             | No       | Spring default size | `20`                   |
+| `sort`     | string                             | No       | `createdAt,desc`    | `createdAt,desc`       |
+
+### Enum values
+
+`ShareApprovalStatus`:
+
+- `UNREVIEWED`
+- `PENDING_APPROVAL`
+- `APPROVED`
+- `REJECTED`
+
+`DocumentShareApprovalType`:
+
+- `PUBLIC`
+- `LINK`
+- `DIRECT`
+
+### Success response
+
+Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Get my document share approvals successfully",
+  "data": {
+    "content": [
+      {
+        "approvalId": 15,
+        "documentId": 123,
+        "documentName": "policy.pdf",
+        "shareType": "PUBLIC",
+        "status": "PENDING_APPROVAL",
+        "createdAt": "2026-08-19T08:30:00Z",
+        "updatedAt": "2026-08-19T08:30:00Z"
+      }
+    ],
+    "pageable": {
+      "pageNumber": 0,
+      "pageSize": 10
+    },
+    "totalElements": 1,
+    "totalPages": 1,
+    "first": true,
+    "last": true,
+    "number": 0,
+    "size": 10,
+    "empty": false
+  },
+  "errors": null,
+  "timestamp": "2026-08-19T08:30:00Z"
+}
+```
+
+### Example request
+
+```text
+GET /api/documents/my/document-share-approvals?status=PENDING_APPROVAL&shareType=PUBLIC&page=0&size=20
+```
+
+### Error cases
+
+| Status | Message              | Reason                                                               |
+| ------ | -------------------- | -------------------------------------------------------------------- |
+| `400`  | `Validation failed`  | Invalid enum/query format, or bad request parameters                                               |
+| `401`  | `Unauthorized`       | Missing or invalid JWT                                               |
+| `404`  | `Resource not found` | Document does not exist, does not belong to the user, or is in Trash |
+| `500`  | `Request failed` | Unexpected server error |
 
 ## 3.8. Move document to Trash
 

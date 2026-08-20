@@ -1,12 +1,7 @@
 package com.se1908.group01.service.impl;
 
 import com.se1908.group01.config.AzureStorageProperties;
-import com.se1908.group01.dto.DocumentPageResponse;
-import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
-import com.se1908.group01.dto.DocumentShareLinkResponse;
-import com.se1908.group01.dto.DocumentShareResponse;
-import com.se1908.group01.dto.DocumentUploadResponse;
-import com.se1908.group01.dto.FileAccessUrlResponse;
+import com.se1908.group01.dto.*;
 import com.se1908.group01.entity.Document;
 import com.se1908.group01.entity.DocumentChunk;
 import com.se1908.group01.entity.DocumentShare;
@@ -905,6 +900,44 @@ public class DocumentServiceImpl implements DocumentService {
 		});
 	}
 
+	@Transactional(readOnly = true)
+	@Override
+	public Page<UserDocumentShareApprovalResponse> getMyDocumentShareApprovals(
+			ShareApprovalStatus status,
+			DocumentShareApprovalType shareType,
+			Pageable pageable
+	) {
+		// Lấy ID của user đang đăng nhập
+		var userId = currentUserService.getCurrentUserId();
+
+		Page<DocumentShareApproval> approvals;
+
+		// Lọc theo các tham số truyền vào
+		if (status != null && shareType != null) {
+			approvals = documentShareApprovalRepository.findByDocument_UserIdAndStatusAndShareType(userId, status, shareType, pageable);
+		} else if (status != null) {
+			approvals = documentShareApprovalRepository.findByDocument_UserIdAndStatus(userId, status, pageable);
+		} else if (shareType != null) {
+			approvals = documentShareApprovalRepository.findByDocument_UserIdAndShareType(userId, shareType, pageable);
+		} else {
+			approvals = documentShareApprovalRepository.findByDocument_UserId(userId, pageable);
+		}
+
+		// Map sang DTO
+		return approvals.map(approval -> {
+			var document = approval.getDocument();
+			return new UserDocumentShareApprovalResponse(
+					approval.getDocumentShareApprovalId(),
+					document.getDocumentId(),
+					document.getOriginalFileName(),
+					approval.getShareType(),
+					approval.getStatus(),
+					approval.getCreatedAt(),
+					approval.getUpdatedAt()
+			);
+		});
+	}
+
 	@Transactional
 	@Override
 	public DocumentUploadResponse updateStarred(Long documentId, Boolean isStarred) {
@@ -963,6 +996,7 @@ public class DocumentServiceImpl implements DocumentService {
 		documentShareRepository.deleteByDocument_DocumentId(doc.getDocumentId());
 		documentShareLinkRepository.deleteByDocument_DocumentId(doc.getDocumentId());
 		chatSessionDocumentRepository.deleteByDocumentDocumentId(doc.getDocumentId());
+		documentShareApprovalRepository.deleteByDocument_DocumentId(doc.getDocumentId());
 		documentRepository.delete(doc);
 	}
 

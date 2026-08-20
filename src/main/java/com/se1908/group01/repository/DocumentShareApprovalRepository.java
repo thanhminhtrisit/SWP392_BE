@@ -26,4 +26,12 @@ public interface DocumentShareApprovalRepository extends JpaRepository<DocumentS
 			DocumentShareApprovalType shareType,
 			Pageable pageable
 	);
+
+	Page<DocumentShareApproval> findByDocument_UserId(Long userId, Pageable pageable);
+
+	Page<DocumentShareApproval> findByDocument_UserIdAndStatus(Long userId, ShareApprovalStatus status, Pageable pageable);
+
+	Page<DocumentShareApproval> findByDocument_UserIdAndStatusAndShareType(Long userId, ShareApprovalStatus status, DocumentShareApprovalType shareType, Pageable pageable);
+
+	Page<DocumentShareApproval> findByDocument_UserIdAndShareType(Long userId, DocumentShareApprovalType shareType, Pageable pageable);
 }

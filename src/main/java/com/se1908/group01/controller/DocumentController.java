@@ -1,15 +1,6 @@
 package com.se1908.group01.controller;
 
-import com.se1908.group01.dto.ApiResponse;
-import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
-import com.se1908.group01.dto.DocumentPageResponse;
-import com.se1908.group01.dto.DocumentShareLinkResponse;
-import com.se1908.group01.dto.DocumentShareResponse;
-import com.se1908.group01.dto.DocumentMoveFolderRequest;
-import com.se1908.group01.dto.DocumentRenameRequest;
-import com.se1908.group01.dto.DocumentUploadResponse;
-import com.se1908.group01.dto.FileAccessUrlResponse;
-import com.se1908.group01.dto.ShareDocumentWithUserRequest;
+import com.se1908.group01.dto.*;
 import com.se1908.group01.enums.ShareApprovalStatus;
 import com.se1908.group01.enums.DocumentShareApprovalType;
 import com.se1908.group01.exception.FileStorageException;
@@ -301,15 +292,26 @@ public class DocumentController {
 	}
 
 	@GetMapping("/document-share-approvals")
-	public ApiResponse<Page<AdminDocumentShareApprovalResponse>> getApprovals(
+	public ApiResponse<Page<AdminDocumentShareApprovalResponse>> getDocumentShareApprovals(
 			@RequestParam(defaultValue = "PENDING_APPROVAL") ShareApprovalStatus status,
 			@RequestParam(required = false) DocumentShareApprovalType shareType,
-			@PageableDefault(sort = "createdAt", direction = Sort.Direction.ASC)
-			Pageable pageable
+			@PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
 	) {
 		return ApiResponse.success(
 				"Get document share approvals successfully",
 				documentService.getDocumentShareApprovals(status, shareType, pageable)
+		);
+	}
+
+	@GetMapping("/my/document-share-approvals")
+	public ApiResponse<Page<UserDocumentShareApprovalResponse>> getMyApprovals(
+			@RequestParam(required = false) ShareApprovalStatus status,
+			@RequestParam(required = false) DocumentShareApprovalType shareType,
+			@PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+	) {
+		return ApiResponse.success(
+				"Get my document share approvals successfully",
+				documentService.getMyDocumentShareApprovals(status, shareType, pageable)
 		);
 	}
 

@@ -1,11 +1,6 @@
 package com.se1908.group01.service;
 
-import com.se1908.group01.dto.DocumentUploadResponse;
-import com.se1908.group01.dto.AdminDocumentShareApprovalResponse;
-import com.se1908.group01.dto.DocumentPageResponse;
-import com.se1908.group01.dto.DocumentShareLinkResponse;
-import com.se1908.group01.dto.DocumentShareResponse;
-import com.se1908.group01.dto.FileAccessUrlResponse;
+import com.se1908.group01.dto.*;
 import com.se1908.group01.enums.ShareApprovalStatus;
 import java.io.IOException;
 import java.time.Instant;
@@ -124,5 +119,11 @@ public interface DocumentService {
 			String sort,
 			int page,
 			int size
+	);
+
+	Page<UserDocumentShareApprovalResponse> getMyDocumentShareApprovals(
+			ShareApprovalStatus status,
+			com.se1908.group01.enums.DocumentShareApprovalType shareType,
+			Pageable pageable
 	);
 }
