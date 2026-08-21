@@ -52,7 +52,10 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createAt;
 
-    @Column(name = "bio", length = 500)
+    // [SUA NGAY 2026-08-20 - co ho tro cua AI] Them columnDefinition NVARCHAR(500).
+    // Tieu su do nguoi dung tu viet -> phai luu duoc tieng Viet. Migration V3 doi cot.
+    // Truong fullName ben tren da la NVARCHAR(100) tu truoc, day la lam cho nhat quan.
+    @Column(name = "bio", length = 500, columnDefinition = "NVARCHAR(500)")
     private String bio;
 
     @Column(name = "avatar_s3_key", length = 1024)

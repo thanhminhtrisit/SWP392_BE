@@ -22,9 +22,30 @@ import org.springframework.util.StringUtils;
 public class DocumentEmbeddingService {
 
 	private static final Logger log = LoggerFactory.getLogger(DocumentEmbeddingService.class);
-	// Prefix khác nhau giúp embedding model phân biệt "đoạn tài liệu" và "truy vấn tìm kiếm".
-	private static final String DOCUMENT_PREFIX = "title: none | text: ";
-	private static final String QUESTION_PREFIX = "task: question answering | query: ";
+
+	// [SUA NGAY 2026-08-20 - co ho tro cua AI] DA XOA 2 HANG SO PREFIX:
+	//     DOCUMENT_PREFIX = "title: none | text: "
+	//     QUESTION_PREFIX = "task: question answering | query: "
+	//
+	// LY DO: day la quy uoc task-type cua Google Gemini embedding. OpenAI
+	// text-embedding-3-small KHONG co khai niem task type - no coi 2 chuoi nay la van ban
+	// binh thuong va embed luon. Do la thieu sot cua dot chuyen Gemini -> OpenAI ngay
+	// 2026-08-11: da doi model, doi ten bien, doi so chieu nhung khong ra lai quy uoc prefix.
+	//
+	// TAC HAI (do bang so that tren tai lieu 40009 ngay 2026-08-20):
+	//   - 2 prefix KHAC NHAU nhau o 2 phia -> vector cau hoi va vector chunk bi day ra xa
+	//     mot cach he thong o moi truy van.
+	//   - Chuoi hang lam nen tuong dong dang len va bop det do phan biet. Top-5 cua mot
+	//     truy van chi trai rong 0.011-0.028 diem -> thu hang gan nhu la nhieu.
+	//   - Trich NGUYEN VAN mot doan tu chunk 0 chi dat 0.6891 (le ra phai 0.85-0.95).
+	//   - Trich NGUYEN VAN mot dong trong bang chi dat 0.5414 va thua 3 chunk KHONG he
+	//     chua doan van do.
+	//
+	// Gio ca 2 phia deu embed van ban tho, doi xung.
+	//
+	// ⚠️ DOI NAY LAM LECH TOAN BO VECTOR CU. Chunk da index truoc 2026-08-20 duoc embed
+	//    kem prefix, cau hoi moi thi khong -> phai index lai tai lieu (xoa + upload lai)
+	//    thi ket qua tim kiem moi dung.
 	private static final int MAX_EMBEDDING_BATCH_SIZE = 90;
 	private static final int MAX_RETRY_ATTEMPTS = 3;
 	private static final Duration DEFAULT_RETRY_DELAY = Duration.ofSeconds(30);
@@ -48,7 +69,8 @@ public class DocumentEmbeddingService {
 			throw new IllegalArgumentException("Question is required");
 		}
 		// Một câu hỏi cũng đi qua pipeline batch chung để dùng cùng cơ chế retry/serialize.
-		var results = embedPreparedVectors(List.of(QUESTION_PREFIX + question));
+		// [SUA NGAY 2026-08-20 - co ho tro cua AI] Bo QUESTION_PREFIX, embed cau hoi tho.
+		var results = embedPreparedVectors(List.of(question));
 		if (results.isEmpty()) {
 			throw new IllegalStateException("Failed to embed question");
 		}
@@ -61,10 +83,12 @@ public class DocumentEmbeddingService {
 			return List.of();
 		}
 
-		// Chuẩn bị từng chunk theo định dạng document trước khi gửi batch sang embedding provider.
+		// [SUA NGAY 2026-08-20 - co ho tro cua AI] Bo DOCUMENT_PREFIX, embed noi dung chunk tho.
+		// Vong lap van giu de chuan hoa null/blank thanh "" - viec nay CAN THIET vi
+		// embedPreparedVectors doi so luong vector tra ve khop dung so luong input.
 		var prepared = new ArrayList<String>(texts.size());
 		for (String text : texts) {
-			prepared.add(StringUtils.hasText(text) ? DOCUMENT_PREFIX + text : "");
+			prepared.add(StringUtils.hasText(text) ? text : "");
 		}
 		return embedPreparedVectors(prepared);
 	}

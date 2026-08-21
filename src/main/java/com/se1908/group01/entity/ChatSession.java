@@ -27,7 +27,10 @@ public class ChatSession {
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
-	@Column(name = "title", nullable = false, length = 200)
+	// [SUA NGAY 2026-08-20 - co ho tro cua AI] Them columnDefinition NVARCHAR(200).
+	// Tieu de phien do nguoi dung dat, truoc la varchar nen mat dau: "On tap SWD392" luu
+	// thanh "On t?p SWD392". Migration V3 doi cot tuong ung.
+	@Column(name = "title", nullable = false, length = 200, columnDefinition = "NVARCHAR(200)")
 	private String title;
 
 	@Enumerated(EnumType.STRING)

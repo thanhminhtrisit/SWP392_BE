@@ -29,7 +29,11 @@ public class DocumentFolder {
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
-	@Column(name = "name", nullable = false, length = 100)
+	// [SUA NGAY 2026-08-20 - co ho tro cua AI] Them columnDefinition NVARCHAR(100).
+	// Ten thu muc do nguoi dung dat -> phai luu duoc tieng Viet. Migration V3 doi cot;
+	// cot nay vuong rang buoc UNIQUE uk_document_folder_user_name nen migration phai
+	// drop -> alter -> tao lai.
+	@Column(name = "name", nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
 	private String name;
 
 	@Column(name = "is_starred", nullable = false)

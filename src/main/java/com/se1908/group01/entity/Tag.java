@@ -25,7 +25,10 @@ public class Tag {
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
-	@Column(name = "name", nullable = false, length = 100)
+	// [SUA NGAY 2026-08-20 - co ho tro cua AI] Them columnDefinition NVARCHAR(100).
+	// Ten tag do nguoi dung dat. Migration V3 doi cot; vuong rang buoc UNIQUE
+	// uk_tag_user_name nen phai drop -> alter -> tao lai.
+	@Column(name = "name", nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
 	private String name;
 
 	@Column(name = "color", nullable = false, length = 7)

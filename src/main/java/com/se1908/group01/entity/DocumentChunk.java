@@ -32,8 +32,19 @@ public class DocumentChunk {
 	@Column(name = "chunk_index", nullable = false)
 	private Integer chunkIndex;
 
-	@Lob
-	@Column(name = "content", nullable = false)
+	// [SUA NGAY 2026-08-20 - co ho tro cua AI] Bo @Lob, them columnDefinition NVARCHAR(MAX).
+	//
+	// LY DO: cot nay truoc la varchar(max) nen mat dau tieng Viet (do tren doc 30008: 38 dau
+	// '?' tren 8/44 chunk). Van ban o day duoc dua THANG vao prompt cua LLM nen AI tra loi
+	// sai ten nguoi trong tai lieu. Migration V3 doi cot sang NVARCHAR(MAX).
+	//
+	// VI SAO BO @Lob: lam theo dung mau cua ChatMessage.content - cot da la nvarchar(max) va
+	// dang chay tot - dung columnDefinition, khong dung @Lob. @Lob map sang kieu CLOB, de
+	// lech voi NVARCHAR(MAX) khi Hibernate chay ddl-auto: validate.
+	//
+	// Luu y: @Lob o truong embeddingVector ben duoi GIU NGUYEN. Cot do chua chuoi JSON toan
+	// chu so (ASCII thuan), co y giu varchar(max) vi doi sang nvarchar se gap doi dung luong.
+	@Column(name = "content", nullable = false, columnDefinition = "NVARCHAR(MAX)")
 	private String content;
 
 	@Column(name = "page_number")

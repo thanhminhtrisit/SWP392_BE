@@ -15,7 +15,14 @@ public class SubscriptionPlan {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    // [SUA NGAY 2026-08-20 - co ho tro cua AI] Them columnDefinition NVARCHAR(100).
+    // Ten goi cuoc hien la ASCII (Free/Basic/Pro) nhung admin co the doi thanh tieng Viet
+    // qua API quan tri. Migration V3 doi cot.
+    //
+    // Luu y: truong description ben duoi van la columnDefinition = "TEXT" - CO Y chua doi.
+    // TEXT khong luu duoc Unicode, nhung doi no doi hoi sua ca entity lan du lieu seed nen
+    // tach ra migration rieng.
+    @Column(nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
     private String name;
 
     @Column(nullable = false)
