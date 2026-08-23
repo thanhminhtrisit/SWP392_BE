@@ -446,9 +446,24 @@ public class DocumentServiceImpl implements DocumentService {
 
 		var existingLink = documentShareLinkRepository
 				.findFirstByDocument_DocumentIdAndOwnerIdAndEnabledTrueOrderByCreatedAtDesc(documentId, userId);
+
 		if (existingLink.isPresent() && !isExpired(existingLink.get())) {
+			// Lấy trạng thái duyệt hiện tại của Link
+			var currentApproval = documentShareApprovalRepository
+					.findByDocument_DocumentIdAndShareType(documentId, DocumentShareApprovalType.LINK);
+
+			// CHỈ đưa về PENDING_APPROVAL nếu nó đang bị REJECTED hoặc chưa từng gửi duyệt.
+			// Bỏ qua không đổi trạng thái nếu nó đang là APPROVED hoặc đang chờ duyệt (PENDING_APPROVAL).
+			if (currentApproval.isEmpty() ||
+					(currentApproval.get().getStatus() != ShareApprovalStatus.APPROVED &&
+							currentApproval.get().getStatus() != ShareApprovalStatus.PENDING_APPROVAL)) {
+
+				setApprovalStatusForType(doc, DocumentShareApprovalType.LINK, ShareApprovalStatus.PENDING_APPROVAL);
+			}
+
 			return toShareLinkResponse(existingLink.get());
 		}
+
 		existingLink.ifPresent(link -> {
 			link.setEnabled(Boolean.FALSE);
 			documentShareLinkRepository.save(link);
@@ -618,8 +633,12 @@ public class DocumentServiceImpl implements DocumentService {
 			throw new IllegalArgumentException("You can only share documents with friends");
 		}
 
-		if (documentShareRepository.existsByDocument_DocumentIdAndSharedWithUser_UserId(documentId, sharedWithUserId)) {
-			throw new IllegalArgumentException("Document is already shared with this user");
+		var existingShare = documentShareRepository
+				.findByDocument_DocumentIdAndSharedWithUser_UserId(documentId, sharedWithUserId);
+
+		if (existingShare.isPresent()) {
+			setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
+			return toDocumentShareResponse(existingShare.get());
 		}
 
 		setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
@@ -899,6 +918,10 @@ public class DocumentServiceImpl implements DocumentService {
 		for (var approval : pendingApprovals) {
 			approval.setStatus(status);
 			documentShareApprovalRepository.save(approval);
+
+			if (status == ShareApprovalStatus.REJECTED && approval.getShareType() == DocumentShareApprovalType.PUBLIC) {
+				doc.setIsPublic(false);
+			}
 		}
 
 		doc.setShareApprovalStatus(resolveAggregateShareApprovalStatus(doc));
