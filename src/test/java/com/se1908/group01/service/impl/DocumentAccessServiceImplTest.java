@@ -7,7 +7,11 @@ import static org.mockito.Mockito.when;
 
 import com.se1908.group01.entity.Document;
 import com.se1908.group01.entity.DocumentFolder;
-import com.se1908.group01.entity.DocumentStatus;
+// [SUA NGAY 2026-08-22 - co ho tro cua AI] Sua import entity -> enums.
+// DocumentStatus nam o package enums; toan bo code main import dung, rieng 4 file test nay
+// con tro vao entity. Loi co san tu truoc, khong lien quan den query rewriting, nhung no
+// lam vo testCompile nen chan moi lenh mvn test.
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.repository.DocumentFolderRepository;
 import com.se1908.group01.repository.DocumentRepository;
 import java.util.List;

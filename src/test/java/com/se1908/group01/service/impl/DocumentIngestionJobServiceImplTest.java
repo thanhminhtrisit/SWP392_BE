@@ -6,7 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.se1908.group01.entity.Document;
-import com.se1908.group01.entity.DocumentStatus;
+// [SUA NGAY 2026-08-22 - co ho tro cua AI] Sua import entity -> enums (loi co san, lam vo testCompile).
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.repository.DocumentRepository;
 import com.se1908.group01.service.DocumentIngestionService;
 import java.nio.file.Files;

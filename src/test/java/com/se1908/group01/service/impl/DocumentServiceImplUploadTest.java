@@ -14,12 +14,15 @@ import static org.mockito.Mockito.when;
 import com.se1908.group01.config.AzureStorageProperties;
 import com.se1908.group01.entity.Document;
 import com.se1908.group01.entity.DocumentFolder;
-import com.se1908.group01.entity.DocumentStatus;
+// [SUA NGAY 2026-08-22 - co ho tro cua AI] Sua import entity -> enums (loi co san, lam vo testCompile).
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.entity.SubscriptionPlan;
 import com.se1908.group01.repository.ChatSessionDocumentRepository;
 import com.se1908.group01.repository.DocumentChunkRepository;
 import com.se1908.group01.repository.DocumentFolderRepository;
 import com.se1908.group01.repository.DocumentRepository;
+// [SUA NGAY 2026-08-22 - co ho tro cua AI] Import moi cho mock con thieu.
+import com.se1908.group01.repository.DocumentShareApprovalRepository;
 import com.se1908.group01.repository.DocumentShareLinkRepository;
 import com.se1908.group01.repository.DocumentShareRepository;
 import com.se1908.group01.repository.DocumentTagRepository;
@@ -65,6 +68,10 @@ class DocumentServiceImplUploadTest {
 	@Mock private DocumentChunkRepository documentChunkRepository;
 	@Mock private DocumentTagRepository documentTagRepository;
 	@Mock private DocumentIngestionService documentIngestionService;
+	// [SUA NGAY 2026-08-22 - co ho tro cua AI] Mock con THIEU. DocumentServiceImpl da nhan
+	// them DocumentShareApprovalRepository o vi tri thu 9 nhung test khong duoc cap nhat theo,
+	// nen testCompile vo. Loi co san, khong lien quan den query rewriting.
+	@Mock private DocumentShareApprovalRepository documentShareApprovalRepository;
 	@Mock private DocumentShareLinkRepository documentShareLinkRepository;
 	@Mock private DocumentShareRepository documentShareRepository;
 	@Mock private FriendshipRepository friendshipRepository;
@@ -89,6 +96,8 @@ class DocumentServiceImplUploadTest {
 				documentChunkRepository,
 				documentTagRepository,
 				documentIngestionService,
+				// [SUA NGAY 2026-08-22 - co ho tro cua AI] Bo sung tham so thu 9 con thieu.
+				documentShareApprovalRepository,
 				documentShareLinkRepository,
 				documentShareRepository,
 				friendshipRepository,

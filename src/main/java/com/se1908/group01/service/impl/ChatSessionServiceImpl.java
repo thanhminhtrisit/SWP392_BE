@@ -32,6 +32,7 @@ import com.se1908.group01.service.DocumentAccessService;
 import com.se1908.group01.service.DocumentEmbeddingService;
 import com.se1908.group01.service.LlmClient;
 import com.se1908.group01.service.PromptBuilderService;
+import com.se1908.group01.service.QueryRewriteService;
 import com.se1908.group01.service.SubscriptionEntitlementService;
 import com.se1908.group01.service.VectorSearchService;
 import java.time.Instant;
@@ -64,6 +65,8 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 	private final LlmClient llmClient;
 	private final AiGenerationOptionsService aiGenerationOptionsService;
 	private final ChatConversationMemoryService chatConversationMemoryService;
+	// [THEM MOI 2026-08-22 - co ho tro cua AI] Viet lai cau hoi follow-up truoc khi embed.
+	private final QueryRewriteService queryRewriteService;
 	private final ChatSessionRepository chatSessionRepository;
 	private final ChatSessionDocumentRepository chatSessionDocumentRepository;
 	private final ChatMessageRepository chatMessageRepository;
@@ -80,6 +83,8 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 			LlmClient llmClient,
 			AiGenerationOptionsService aiGenerationOptionsService,
 			ChatConversationMemoryService chatConversationMemoryService,
+			// [THEM MOI 2026-08-22 - co ho tro cua AI] Tham so moi. Test cu phai cap nhat theo.
+			QueryRewriteService queryRewriteService,
 			ChatSessionRepository chatSessionRepository,
 			ChatSessionDocumentRepository chatSessionDocumentRepository,
 			ChatMessageRepository chatMessageRepository,
@@ -95,6 +100,7 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 		this.llmClient = llmClient;
 		this.aiGenerationOptionsService = aiGenerationOptionsService;
 		this.chatConversationMemoryService = chatConversationMemoryService;
+		this.queryRewriteService = queryRewriteService;
 		this.chatSessionRepository = chatSessionRepository;
 		this.chatSessionDocumentRepository = chatSessionDocumentRepository;
 		this.chatMessageRepository = chatMessageRepository;
@@ -304,8 +310,26 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 			var resolvedDocumentIds = documents.stream()
 					.map(Document::getDocumentId)
 					.toList();
-			// Embed câu hỏi trực tiếp; source hiện tại không có bước dịch tiếng Việt sang tiếng Anh.
-			var questionEmbedding = documentEmbeddingService.embedQuestion(request.question());
+			// [SUA NGAY 2026-08-22 - co ho tro cua AI] THEM buoc viet lai truy van.
+			//
+			// TRUOC DAY: embed thang request.question(). conversationMemory duoc lay o tren
+			// nhung CHI dung khi dung prompt, khong he di vao cau tim kiem. Hau qua la tu cau
+			// hoi thu hai tro di ("nguoi thu hai phu trach gi?") thi truy hoi mu hoan toan.
+			//
+			// BAY GIO: viet lai thanh cau hoi doc lap roi moi embed. Cau GOC van duoc luu vao
+			// lich su (o tren) va van di vao prompt (o duoi) - chi rieng chuoi dem di tim kiem
+			// la ban viet lai.
+			//
+			// AN TOAN: queryRewriteService khong bao gio nem exception. Lich su rong, co tat,
+			// hay LLM loi deu tra ve cau hoi goc. Neu no hong thi hanh vi quay ve dung nhu cu.
+			var searchQuery = queryRewriteService.rewrite(
+					request.question(),
+					conversationMemory,
+					options
+			);
+			// Embed câu hỏi (đã viết lại nếu là follow-up); source hiện tại không có bước dịch
+			// tiếng Việt sang tiếng Anh.
+			var questionEmbedding = documentEmbeddingService.embedQuestion(searchQuery);
 			var chunks = vectorSearchService.search(
 					questionEmbedding,
 					resolvedDocumentIds,
@@ -339,7 +363,9 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 			);
 			var sources = saveSources(assistantMessage, chunks);
 			touchSession(session);
-			return toMessageResponse(assistantMessage, sources);
+			// [SUA NGAY 2026-08-22 - co ho tro cua AI] Tra kem searchQuery de kiem chung duoc
+			// query rewriting bang Postman ma khong phai doc log server.
+			return toMessageResponse(assistantMessage, sources, searchQuery);
 		} catch (RuntimeException ex) {
 			// Nếu lỗi sau khi đã ghi USER message, lưu ASSISTANT FAILED để lịch sử phản ánh lần gọi lỗi.
 			saveMessage(
@@ -433,9 +459,21 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 		return result;
 	}
 
+	// [SUA NGAY 2026-08-22 - co ho tro cua AI] Ban 2 tham so nay duoc GIU LAI de moi loi goi
+	// cu (doc lich su tin nhan) khong phai sua. No uy quyen sang ban 3 tham so voi
+	// rewrittenQuestion = null - dung ngu nghia mong muon, vi luc doc lai lich su thi khong
+	// con khai niem "cau vua duoc tim kiem".
 	private ChatMessageResponse toMessageResponse(
 			ChatMessage message,
 			List<ChatMessageSourceResponse> sources
+	) {
+		return toMessageResponse(message, sources, null);
+	}
+
+	private ChatMessageResponse toMessageResponse(
+			ChatMessage message,
+			List<ChatMessageSourceResponse> sources,
+			String rewrittenQuestion
 	) {
 		// Chuẩn hóa entity message và source thành DTO public, không trả trực tiếp entity JPA ra API.
 		return new ChatMessageResponse(
@@ -444,7 +482,8 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 				message.getContent(),
 				message.getStatus(),
 				message.getCreatedAt(),
-				sources
+				sources,
+				rewrittenQuestion
 		);
 	}
 

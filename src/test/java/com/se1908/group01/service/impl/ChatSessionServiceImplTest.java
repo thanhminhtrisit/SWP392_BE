@@ -29,6 +29,7 @@ import com.se1908.group01.service.DocumentAccessService;
 import com.se1908.group01.service.DocumentEmbeddingService;
 import com.se1908.group01.service.LlmClient;
 import com.se1908.group01.service.PromptBuilderService;
+import com.se1908.group01.service.QueryRewriteService;
 import com.se1908.group01.service.SubscriptionEntitlementService;
 import com.se1908.group01.service.VectorSearchService;
 import java.util.List;
@@ -58,6 +59,10 @@ class ChatSessionServiceImplTest {
 	private AiGenerationOptionsService aiGenerationOptionsService;
 	@Mock
 	private ChatConversationMemoryService chatConversationMemoryService;
+	// [SUA NGAY 2026-08-22 - co ho tro cua AI] Mock moi. Constructor cua
+	// ChatSessionServiceImpl da them mot tham so nen test cu khong compile duoc nua.
+	@Mock
+	private QueryRewriteService queryRewriteService;
 	@Mock
 	private ChatSessionRepository chatSessionRepository;
 	@Mock
@@ -82,6 +87,7 @@ class ChatSessionServiceImplTest {
 				llmClient,
 				aiGenerationOptionsService,
 				chatConversationMemoryService,
+				queryRewriteService,
 				chatSessionRepository,
 				chatSessionDocumentRepository,
 				chatMessageRepository,

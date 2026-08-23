@@ -3,7 +3,8 @@ package com.se1908.group01.service.impl;
 import com.se1908.group01.dto.ChunkData;
 import com.se1908.group01.dto.TextSegment;
 import com.se1908.group01.entity.Document;
-import com.se1908.group01.entity.DocumentStatus;
+// [SUA NGAY 2026-08-22 - co ho tro cua AI] Sua import entity -> enums (loi co san, lam vo testCompile).
+import com.se1908.group01.enums.DocumentStatus;
 import com.se1908.group01.exception.DoclingUnavailableException;
 import com.se1908.group01.repository.DocumentChunkRepository;
 import com.se1908.group01.repository.DocumentRepository;

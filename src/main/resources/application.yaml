@@ -158,6 +158,23 @@ rag:
   user-storage:
     allow-general-knowledge: false
 
+  # [THEM MOI 2026-08-22 - co ho tro cua AI] Viet lai cau hoi follow-up truoc khi embed.
+  #
+  # VAN DE: ChatSessionServiceImpl lay conversationMemory ra nhung chi dung khi dung prompt,
+  # con chuoi dem di embed van la cau hoi tho. Tu cau thu hai tro di ("nguoi thu hai phu
+  # trach gi?") thi truy hoi mu. Loi bi che giau mot phan vi cau tra loi cu con nam trong
+  # cua so 5 tin nhan cua ChatConversationMemoryService - het cua so thi hoi thoai "quen".
+  #
+  # Chi anh huong API session. /api/chat/ask va /api/chat/ask-multi khong co session nen
+  # khong dung den.
+  query-rewrite:
+    # Dat RAG_QUERY_REWRITE_ENABLED=false trong .env de tat, phuc vu so sanh A/B luc demo
+    # ma khong phai build lai.
+    enabled: ${RAG_QUERY_REWRITE_ENABLED:true}
+    # So tin nhan gan nhat dua vao prompt viet lai. De 3 chu khong phai 5: cang nhieu lich
+    # su thi model cang de viet lai lech sang chu de cu.
+    max-memory-messages: ${RAG_QUERY_REWRITE_MAX_MEMORY_MESSAGES:3}
+
 ocr:
   tesseract:
     enabled: ${TESSERACT_ENABLED:false}
@@ -173,7 +190,7 @@ docling:
   base-url: ${DOCLING_BASE_URL:http://localhost:5001}
   api-key: ${DOCLING_API_KEY:}
   timeout-seconds: ${DOCLING_TIMEOUT_SECONDS:300}
-  max-tokens: ${DOCLING_MAX_TOKENS:300}
+  max-tokens: ${DOCLING_MAX_TOKENS:500}
   use-markdown-tables: ${DOCLING_USE_MARKDOWN_TABLES:true}
   merge-peers: ${DOCLING_MERGE_PEERS:true}
   fallback-enabled: ${DOCLING_FALLBACK_ENABLED:true}
