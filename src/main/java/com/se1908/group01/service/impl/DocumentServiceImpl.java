@@ -224,7 +224,21 @@ public class DocumentServiceImpl implements DocumentService {
 	@Override
 	public DocumentUploadResponse getDocumentDetail(Long documentId) {
 		var userId = currentUserService.getCurrentUserId();
-		return toResponse(findOwnedActiveDocument(userId, documentId));
+		var user = userRepository.findById(userId)
+				.orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+
+		Document doc;
+		if (user.getRole() == com.se1908.group01.enums.Role.ADMIN) {
+			doc = documentRepository.findById(documentId)
+					.orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+			if (Boolean.TRUE.equals(doc.getIsDeleted())) {
+				throw new ResourceNotFoundException("Document not found");
+			}
+		} else {
+			doc = findOwnedActiveDocument(userId, documentId);
+		}
+
+		return toResponse(doc);
 	}
 
 	@Transactional
@@ -254,14 +268,40 @@ public class DocumentServiceImpl implements DocumentService {
 	@Override
 	public FileAccessUrlResponse getPreviewUrl(Long documentId) {
 		var userId = currentUserService.getCurrentUserId();
-		return toFileAccessUrlResponse(findOwnedActiveDocument(userId, documentId), false);
+		var user = userRepository.findById(userId).orElseThrow();
+
+		Document doc;
+		if (user.getRole() == com.se1908.group01.enums.Role.ADMIN) {
+			// Nếu là Admin: Bypass quyền sở hữu, lấy thẳng bằng ID
+			doc = documentRepository.findById(documentId)
+					.orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+		} else {
+			// Nếu là User thường: Chạy chốt chặn bình thường
+			doc = findOwnedActiveDocument(userId, documentId);
+		}
+
+		return toFileAccessUrlResponse(doc, false);
 	}
 
 	@Transactional(readOnly = true)
 	@Override
 	public FileAccessUrlResponse getDownloadUrl(Long documentId) {
 		var userId = currentUserService.getCurrentUserId();
-		return toFileAccessUrlResponse(findOwnedActiveDocument(userId, documentId), true);
+		var user = userRepository.findById(userId)
+				.orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+
+		Document doc;
+		if (user.getRole() == com.se1908.group01.enums.Role.ADMIN) {
+			doc = documentRepository.findById(documentId)
+					.orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+			if (Boolean.TRUE.equals(doc.getIsDeleted())) {
+				throw new ResourceNotFoundException("Document not found");
+			}
+		} else {
+			doc = findOwnedActiveDocument(userId, documentId);
+		}
+
+		return toFileAccessUrlResponse(doc, true);
 	}
 
 	@Transactional(readOnly = true)
