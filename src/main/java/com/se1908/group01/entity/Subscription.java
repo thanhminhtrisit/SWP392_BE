@@ -34,6 +34,10 @@ public class Subscription {
     @JoinColumn(name = "plan_id", nullable = false)
     private SubscriptionPlan plan;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_id")
+    private Payment payment;
+
     @PrePersist
     public void prePersist() {
         if (status == null) {

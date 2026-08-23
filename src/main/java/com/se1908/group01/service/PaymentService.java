@@ -168,7 +168,8 @@ public class PaymentService {
             paymentRepository.save(payment);
             subscriptionLifecycleService.activatePaidSubscription(
                     payment.getUser(),
-                    payment.getPlan()
+                    payment.getPlan(),
+                    payment
             );
         } else {
             payment.setStatus(PaymentStatus.FAILED);

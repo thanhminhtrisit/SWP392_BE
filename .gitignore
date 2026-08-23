@@ -55,3 +55,5 @@ MANUAL_TEST_CASES.md
 API_CONTRACT.md
 group01.iml
 .env.example
+
+src/main/resources/application.yaml
