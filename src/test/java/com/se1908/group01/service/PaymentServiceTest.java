@@ -191,7 +191,8 @@ class PaymentServiceTest {
         verify(subscriptionLifecycleService)
                 .activatePaidSubscription(
                         payment.getUser(),
-                        payment.getPlan());
+                        payment.getPlan(),
+                        payment);
     }
 
     @Test
@@ -223,7 +224,7 @@ class PaymentServiceTest {
 
         verify(paymentRepository, never()).save(any(Payment.class));
         verify(subscriptionLifecycleService, never())
-                .activatePaidSubscription(any(), any());
+                .activatePaidSubscription(any(), any(), any());
     }
 
     @Test
@@ -239,7 +240,7 @@ class PaymentServiceTest {
         assertEquals(PaymentStatus.SUCCESS, response.getStatus());
         assertEquals(true, response.isAlreadyProcessed());
         verify(subscriptionLifecycleService, never())
-                .activatePaidSubscription(any(), any());
+                .activatePaidSubscription(any(), any(), any());
     }
 
     @Test

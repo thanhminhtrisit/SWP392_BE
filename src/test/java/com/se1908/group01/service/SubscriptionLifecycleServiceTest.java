@@ -13,7 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -57,7 +57,7 @@ class SubscriptionLifecycleServiceTest {
         when(subscriptionRepository.findByUserAndStatus(
                 user,
                 SubscriptionStatus.ACTIVE))
-                .thenReturn(Optional.of(active));
+                .thenReturn(List.of(active));
 
         Subscription result = service.getOrCreateActiveSubscription(user);
 
@@ -72,7 +72,7 @@ class SubscriptionLifecycleServiceTest {
         when(subscriptionRepository.findByUserAndStatus(
                 user,
                 SubscriptionStatus.ACTIVE))
-                .thenReturn(Optional.empty());
+                .thenReturn(List.of());
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.of(freePlan));
         when(subscriptionRepository.save(any(Subscription.class)))
@@ -96,7 +96,7 @@ class SubscriptionLifecycleServiceTest {
         when(subscriptionRepository.findByUserAndStatus(
                 user,
                 SubscriptionStatus.ACTIVE))
-                .thenReturn(Optional.of(expiredPaid));
+                .thenReturn(List.of(expiredPaid));
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.of(freePlan));
         when(subscriptionRepository.save(any(Subscription.class)))
@@ -114,7 +114,7 @@ class SubscriptionLifecycleServiceTest {
         when(subscriptionRepository.findByUserAndStatus(
                 user,
                 SubscriptionStatus.ACTIVE))
-                .thenReturn(Optional.empty());
+                .thenReturn(List.of());
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.empty());
 
@@ -125,14 +125,10 @@ class SubscriptionLifecycleServiceTest {
     }
 
     @Test
-    void activatingPaidPlanExpiresCurrentFreeSubscription() {
+    void activatingPaidPlanCreatesIndependentActiveSubscription() {
         Subscription activeFree = subscription(freePlan(), null);
         SubscriptionPlan plusPlan = paidPlan();
 
-        when(subscriptionRepository.findByUserAndStatus(
-                user,
-                SubscriptionStatus.ACTIVE))
-                .thenReturn(Optional.of(activeFree));
         when(subscriptionRepository.save(any(Subscription.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -141,12 +137,45 @@ class SubscriptionLifecycleServiceTest {
                 plusPlan
         );
 
-        assertEquals(SubscriptionStatus.EXPIRED, activeFree.getStatus());
+        assertEquals(SubscriptionStatus.ACTIVE, activeFree.getStatus());
         assertSame(plusPlan, result.getPlan());
         assertEquals(
                 LocalDate.now().plusDays(30),
                 result.getEndDate()
         );
+    }
+
+    @Test
+    void returnsHighestPlanFromMultipleActiveSubscriptions() {
+        Subscription basic = subscription(basicPlan(), LocalDate.now().plusDays(10));
+        Subscription premium = subscription(paidPlan(), LocalDate.now().plusDays(5));
+
+        when(subscriptionRepository.findByUserAndStatus(
+                user,
+                SubscriptionStatus.ACTIVE))
+                .thenReturn(List.of(basic, premium));
+
+        Subscription result = service.getEffectiveSubscription(user);
+
+        assertSame(premium, result);
+        verify(planRepository, never())
+                .findByNameIgnoreCaseAndActiveTrue(any());
+    }
+
+    @Test
+    void ignoresExpiredPremiumAndKeepsActiveBasicEffective() {
+        Subscription expiredPremium = subscription(paidPlan(), LocalDate.now().minusDays(1));
+        Subscription activeBasic = subscription(basicPlan(), LocalDate.now().plusDays(10));
+
+        when(subscriptionRepository.findByUserAndStatus(
+                user,
+                SubscriptionStatus.ACTIVE))
+                .thenReturn(List.of(expiredPremium, activeBasic));
+
+        Subscription result = service.getEffectiveSubscription(user);
+
+        assertEquals(SubscriptionStatus.EXPIRED, expiredPremium.getStatus());
+        assertSame(activeBasic, result);
     }
 
     private Subscription subscription(
@@ -176,9 +205,29 @@ class SubscriptionLifecycleServiceTest {
     private SubscriptionPlan paidPlan() {
         return SubscriptionPlan.builder()
                 .id(2L)
-                .name("PLUS")
+                .name("PREMIUM")
                 .price(99000D)
                 .durationDays(30)
+                .storageLimitGb(50)
+                .monthlyTokenLimit(100000L)
+                .maxUploadSizeMb(100)
+                .multipleDocuments(true)
+                .videoUpload(true)
+                .active(true)
+                .build();
+    }
+
+    private SubscriptionPlan basicPlan() {
+        return SubscriptionPlan.builder()
+                .id(3L)
+                .name("BASIC")
+                .price(49000D)
+                .durationDays(30)
+                .storageLimitGb(10)
+                .monthlyTokenLimit(20000L)
+                .maxUploadSizeMb(30)
+                .multipleDocuments(false)
+                .videoUpload(false)
                 .active(true)
                 .build();
     }
