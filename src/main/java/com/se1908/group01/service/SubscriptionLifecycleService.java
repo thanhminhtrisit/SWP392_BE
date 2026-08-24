@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,10 +34,16 @@ public class SubscriptionLifecycleService {
                 .filter(this::isExpired)
                 .forEach(this::expire);
 
-        return activeSubscriptions.stream()
+        Subscription effectiveSubscription = activeSubscriptions.stream()
                 .filter(subscription -> !isExpired(subscription))
                 .max(this::compareEffectiveSubscription)
-                .orElseGet(() -> createFreeSubscription(user));
+                .orElse(null);
+
+        if (effectiveSubscription != null) {
+            return effectiveSubscription;
+        }
+
+        return activateDuePendingSubscription(user);
     }
 
     @Transactional
@@ -44,11 +51,29 @@ public class SubscriptionLifecycleService {
         return getOrCreateActiveSubscription(user);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Subscription> getNextPendingSubscription(User user) {
+        return subscriptionRepository
+                .findByUserAndStatus(user, SubscriptionStatus.PENDING)
+                .stream()
+                .max(this::compareEffectiveSubscription);
+    }
+
     @Transactional
     public Subscription activatePaidSubscription(
             User user,
             SubscriptionPlan plan,
             Payment payment) {
+
+        Subscription effectiveSubscription = getEffectiveSubscription(user);
+        if (isDowngrade(effectiveSubscription.getPlan(), plan)) {
+            return createPendingSubscription(
+                    user,
+                    plan,
+                    payment,
+                    effectiveSubscription.getEndDate()
+            );
+        }
 
         Subscription subscription = Subscription.builder()
                 .user(user)
@@ -68,6 +93,58 @@ public class SubscriptionLifecycleService {
             SubscriptionPlan plan) {
 
         return activatePaidSubscription(user, plan, null);
+    }
+
+    private Subscription activateDuePendingSubscription(User user) {
+        List<Subscription> pendingSubscriptions = subscriptionRepository
+                .findByUserAndStatus(user, SubscriptionStatus.PENDING);
+
+        Subscription pendingSubscription = pendingSubscriptions.stream()
+                .filter(this::isPendingReady)
+                .max(this::compareEffectiveSubscription)
+                .orElse(null);
+
+        if (pendingSubscription != null) {
+            pendingSubscription.setStatus(SubscriptionStatus.ACTIVE);
+            return subscriptionRepository.save(pendingSubscription);
+        }
+
+        return createFreeSubscription(user);
+    }
+
+    private Subscription createPendingSubscription(
+            User user,
+            SubscriptionPlan plan,
+            Payment payment,
+            LocalDate currentEndDate) {
+
+        LocalDate startDate = currentEndDate == null
+                ? LocalDate.now()
+                : currentEndDate.plusDays(1);
+
+        Subscription subscription = Subscription.builder()
+                .user(user)
+                .plan(plan)
+                .payment(payment)
+                .startDate(startDate)
+                .endDate(startDate.plusDays(plan.getDurationDays()))
+                .status(SubscriptionStatus.PENDING)
+                .build();
+
+        return subscriptionRepository.save(subscription);
+    }
+
+    private boolean isDowngrade(
+            SubscriptionPlan currentPlan,
+            SubscriptionPlan requestedPlan) {
+
+        return effectivePlanComparator()
+                .compare(requestedPlan, currentPlan) < 0;
+    }
+
+    private boolean isPendingReady(Subscription subscription) {
+        return subscription.getStartDate() == null
+                || !subscription.getStartDate().isAfter(LocalDate.now());
     }
 
     private int compareEffectiveSubscription(

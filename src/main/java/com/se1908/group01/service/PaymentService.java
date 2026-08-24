@@ -287,8 +287,12 @@ public class PaymentService {
                 .getOrCreateActiveSubscription(user);
 
         SubscriptionPlan plan = subscription.getPlan();
+        Subscription pendingSubscription = subscriptionLifecycleService
+                .getNextPendingSubscription(user)
+                .orElse(null);
 
-        return SubscriptionResponse.builder()
+        SubscriptionResponse.SubscriptionResponseBuilder responseBuilder =
+                SubscriptionResponse.builder()
                 .subscriptionId(subscription.getId())
                 .status(subscription.getStatus())
                 .startDate(subscription.getStartDate())
@@ -301,8 +305,17 @@ public class PaymentService {
                 .maxUploadSizeMb(plan.getMaxUploadSizeMb())
                 .multipleDocuments(plan.getMultipleDocuments())
                 .videoUpload(plan.getVideoUpload())
-                .monthlyTokenLimit(plan.getMonthlyTokenLimit())
-                .build();
+                .monthlyTokenLimit(plan.getMonthlyTokenLimit());
+
+        if (pendingSubscription != null) {
+            responseBuilder
+                    .pendingSubscriptionId(pendingSubscription.getId())
+                    .pendingPlanName(pendingSubscription.getPlan().getName())
+                    .pendingStartDate(pendingSubscription.getStartDate())
+                    .pendingEndDate(pendingSubscription.getEndDate());
+        }
+
+        return responseBuilder.build();
     }
 
     private User findUser(String email) {

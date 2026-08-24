@@ -43,4 +43,13 @@ public class SubscriptionResponse {
     private Boolean videoUpload;
 
     private Long monthlyTokenLimit;
+
+    // ===== Pending downgrade =====
+    private Long pendingSubscriptionId;
+
+    private String pendingPlanName;
+
+    private LocalDate pendingStartDate;
+
+    private LocalDate pendingEndDate;
 }
