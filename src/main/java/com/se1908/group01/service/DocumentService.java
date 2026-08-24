@@ -126,4 +126,8 @@ public interface DocumentService {
 			com.se1908.group01.enums.DocumentShareApprovalType shareType,
 			Pageable pageable
 	);
+
+	DocumentShareResponse reviewIndividualShareApproval(Long documentShareId, ShareApprovalStatus status);
+
+	List<DocumentShareResponse> bulkShareDocumentWithUsers(Long documentId, List<String> emails);
 }

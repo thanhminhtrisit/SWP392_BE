@@ -1,5 +1,6 @@
 package com.se1908.group01.dto;
 
+import com.se1908.group01.enums.ShareApprovalStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +21,6 @@ public class DocumentShareResponse {
 	private String sharedWithEmail;
 	private String sharedWithName;
 	private Instant createdAt;
-
+	private ShareApprovalStatus status;
 
 }

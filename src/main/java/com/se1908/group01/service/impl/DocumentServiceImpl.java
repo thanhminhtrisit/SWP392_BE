@@ -637,16 +637,17 @@ public class DocumentServiceImpl implements DocumentService {
 				.findByDocument_DocumentIdAndSharedWithUser_UserId(documentId, sharedWithUserId);
 
 		if (existingShare.isPresent()) {
-			setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
-			return toDocumentShareResponse(existingShare.get());
+			var share = existingShare.get();
+			share.setStatus(ShareApprovalStatus.PENDING_APPROVAL);
+			return toDocumentShareResponse(documentShareRepository.save(share));
 		}
-
-		setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
 
 		var documentShare = new DocumentShare();
 		documentShare.setDocument(doc);
 		documentShare.setOwnerId(ownerId);
 		documentShare.setSharedWithUser(sharedWithUser);
+		// Gán trạng thái cho RIÊNG người này
+		documentShare.setStatus(ShareApprovalStatus.PENDING_APPROVAL);
 
 		return toDocumentShareResponse(documentShareRepository.save(documentShare));
 	}
@@ -699,9 +700,9 @@ public class DocumentServiceImpl implements DocumentService {
 		var userId = currentUserService.getCurrentUserId();
 		return documentShareRepository.findBySharedWithUser_UserIdOrderByCreatedAtDesc(userId)
 				.stream()
+				.filter(share -> share.getStatus() == ShareApprovalStatus.APPROVED)
 				.map(DocumentShare::getDocument)
 				.filter(doc -> !Boolean.TRUE.equals(doc.getIsDeleted()))
-				.filter(doc -> doc.getShareApprovalStatus() == ShareApprovalStatus.APPROVED)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -926,6 +927,44 @@ public class DocumentServiceImpl implements DocumentService {
 
 		doc.setShareApprovalStatus(resolveAggregateShareApprovalStatus(doc));
 		return toResponse(documentRepository.save(doc));
+	}
+
+	@Transactional
+	public DocumentShareResponse reviewIndividualShareApproval(Long documentShareId, ShareApprovalStatus status) {
+		assertAdmin();
+		if (status == null || (status != ShareApprovalStatus.APPROVED && status != ShareApprovalStatus.REJECTED)) {
+			throw new IllegalArgumentException("Invalid status");
+		}
+
+		var share = documentShareRepository.findById(documentShareId)
+				.orElseThrow(() -> new ResourceNotFoundException("Share request not found"));
+
+		share.setStatus(status);
+		return toDocumentShareResponse(documentShareRepository.save(share));
+	}
+
+	@Transactional
+	@Override
+	public List<DocumentShareResponse> bulkShareDocumentWithUsers(Long documentId, List<String> emails) {
+		if (emails == null || emails.isEmpty()) {
+			throw new IllegalArgumentException("Email list cannot be empty");
+		}
+
+		List<DocumentShareResponse> successfulShares = new java.util.ArrayList<>();
+
+		for (String email : emails) {
+			try {
+				// Tái sử dụng lại 100% logic của hàm share cá nhân đã viết ở trên
+				DocumentShareResponse response = shareDocumentWithUser(documentId, email);
+				successfulShares.add(response);
+			} catch (Exception ex) {
+				// Nếu share cho 1 người bị lỗi (chưa kết bạn, sai email...),
+				// hệ thống ghi log lại và tiếp tục share cho người tiếp theo thay vì crash toàn bộ.
+				System.err.println("Could not share document with " + email + ": " + ex.getMessage());
+			}
+		}
+
+		return successfulShares;
 	}
 
 	@Transactional(readOnly = true)
@@ -1392,6 +1431,7 @@ public class DocumentServiceImpl implements DocumentService {
 		response.setSharedWithEmail(sharedWithUser.getEmail());
 		response.setSharedWithName(sharedWithUser.getFullName());
 		response.setCreatedAt(documentShare.getCreatedAt());
+		response.setStatus(documentShare.getStatus());
 		return response;
 	}
 

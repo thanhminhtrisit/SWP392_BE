@@ -324,6 +324,24 @@ public class DocumentController {
 		return ApiResponse.success("Review document share approval successfully", response);
 	}
 
+	@PatchMapping("/shares/{documentShareId}/approval")
+	public ApiResponse<DocumentShareResponse> reviewIndividualShareApproval(
+			@PathVariable Long documentShareId,
+			@RequestParam("status") ShareApprovalStatus status
+	) {
+		var response = documentService.reviewIndividualShareApproval(documentShareId, status);
+		return ApiResponse.success("Review individual share approval successfully", response);
+	}
+
+	@PostMapping("/{documentId}/shares/users/bulk")
+	public ApiResponse<List<DocumentShareResponse>> bulkShareDocumentWithUsers(
+			@PathVariable Long documentId,
+			@RequestBody List<String> emails
+	) {
+		var response = documentService.bulkShareDocumentWithUsers(documentId, emails);
+		return ApiResponse.success("Bulk share document successfully", response);
+	}
+
 	@PatchMapping("/{documentId}/star")
 	public ApiResponse<DocumentUploadResponse> updateStarred(
 			@PathVariable Long documentId,
