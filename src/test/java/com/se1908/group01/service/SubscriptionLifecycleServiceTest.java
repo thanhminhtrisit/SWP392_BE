@@ -74,9 +74,7 @@ class SubscriptionLifecycleServiceTest {
                 user,
                 SubscriptionStatus.ACTIVE))
                 .thenReturn(List.of());
-        when(subscriptionRepository.findByUserAndStatus(
-                user,
-                SubscriptionStatus.PENDING))
+        when(subscriptionRepository.findPendingByUserOrderByActivationPriority(user))
                 .thenReturn(List.of());
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.of(freePlan));
@@ -102,9 +100,7 @@ class SubscriptionLifecycleServiceTest {
                 user,
                 SubscriptionStatus.ACTIVE))
                 .thenReturn(List.of(expiredPaid));
-        when(subscriptionRepository.findByUserAndStatus(
-                user,
-                SubscriptionStatus.PENDING))
+        when(subscriptionRepository.findPendingByUserOrderByActivationPriority(user))
                 .thenReturn(List.of());
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.of(freePlan));
@@ -124,9 +120,7 @@ class SubscriptionLifecycleServiceTest {
                 user,
                 SubscriptionStatus.ACTIVE))
                 .thenReturn(List.of());
-        when(subscriptionRepository.findByUserAndStatus(
-                user,
-                SubscriptionStatus.PENDING))
+        when(subscriptionRepository.findPendingByUserOrderByActivationPriority(user))
                 .thenReturn(List.of());
         when(planRepository.findByNameIgnoreCaseAndActiveTrue("FREE"))
                 .thenReturn(Optional.empty());
@@ -206,9 +200,7 @@ class SubscriptionLifecycleServiceTest {
                 user,
                 SubscriptionStatus.ACTIVE))
                 .thenReturn(List.of(expiredPremium));
-        when(subscriptionRepository.findByUserAndStatus(
-                user,
-                SubscriptionStatus.PENDING))
+        when(subscriptionRepository.findPendingByUserOrderByActivationPriority(user))
                 .thenReturn(List.of(pendingBasic));
         when(subscriptionRepository.save(any(Subscription.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -216,6 +208,39 @@ class SubscriptionLifecycleServiceTest {
         Subscription result = service.getEffectiveSubscription(user);
 
         assertEquals(SubscriptionStatus.EXPIRED, expiredPremium.getStatus());
+        assertEquals(SubscriptionStatus.ACTIVE, pendingBasic.getStatus());
+        assertSame(pendingBasic, result);
+    }
+
+    @Test
+    void activatesPendingSubscriptionInsteadOfReturningExistingFreePlan() {
+        Subscription expiredPremium = subscription(
+                paidPlan(),
+                LocalDate.now().minusDays(1)
+        );
+        Subscription activeFree = subscription(freePlan(), null);
+        Subscription pendingBasic = Subscription.builder()
+                .id(2L)
+                .user(user)
+                .plan(basicPlan())
+                .startDate(LocalDate.now())
+                .endDate(LocalDate.now().plusDays(30))
+                .status(SubscriptionStatus.PENDING)
+                .build();
+
+        when(subscriptionRepository.findByUserAndStatus(
+                user,
+                SubscriptionStatus.ACTIVE))
+                .thenReturn(List.of(expiredPremium, activeFree));
+        when(subscriptionRepository.findPendingByUserOrderByActivationPriority(user))
+                .thenReturn(List.of(pendingBasic));
+        when(subscriptionRepository.save(any(Subscription.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Subscription result = service.getEffectiveSubscription(user);
+
+        assertEquals(SubscriptionStatus.EXPIRED, expiredPremium.getStatus());
+        assertEquals(SubscriptionStatus.ACTIVE, activeFree.getStatus());
         assertEquals(SubscriptionStatus.ACTIVE, pendingBasic.getStatus());
         assertSame(pendingBasic, result);
     }

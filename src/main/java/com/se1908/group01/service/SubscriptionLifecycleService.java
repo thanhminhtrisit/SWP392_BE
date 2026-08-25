@@ -40,10 +40,15 @@ public class SubscriptionLifecycleService {
                 .orElse(null);
 
         if (effectiveSubscription != null) {
+            if (isFreePlan(effectiveSubscription.getPlan())) {
+                return activateDuePendingSubscription(user)
+                        .orElse(effectiveSubscription);
+            }
             return effectiveSubscription;
         }
 
-        return activateDuePendingSubscription(user);
+        return activateDuePendingSubscription(user)
+                .orElseGet(() -> createFreeSubscription(user));
     }
 
     @Transactional
@@ -54,9 +59,9 @@ public class SubscriptionLifecycleService {
     @Transactional(readOnly = true)
     public Optional<Subscription> getNextPendingSubscription(User user) {
         return subscriptionRepository
-                .findByUserAndStatus(user, SubscriptionStatus.PENDING)
+                .findPendingByUserOrderByActivationPriority(user)
                 .stream()
-                .max(this::compareEffectiveSubscription);
+                .findFirst();
     }
 
     @Transactional
@@ -95,21 +100,23 @@ public class SubscriptionLifecycleService {
         return activatePaidSubscription(user, plan, null);
     }
 
-    private Subscription activateDuePendingSubscription(User user) {
-        List<Subscription> pendingSubscriptions = subscriptionRepository
-                .findByUserAndStatus(user, SubscriptionStatus.PENDING);
-
-        Subscription pendingSubscription = pendingSubscriptions.stream()
-                .filter(this::isPendingReady)
-                .max(this::compareEffectiveSubscription)
+    private Optional<Subscription> activateDuePendingSubscription(User user) {
+        Subscription pendingSubscription = subscriptionRepository
+                .findPendingByUserOrderByActivationPriority(user)
+                .stream()
+                .findFirst()
                 .orElse(null);
 
         if (pendingSubscription != null) {
+            LocalDate startDate = LocalDate.now();
+            pendingSubscription.setStartDate(startDate);
+            pendingSubscription.setEndDate(startDate.plusDays(
+                    pendingSubscription.getPlan().getDurationDays()));
             pendingSubscription.setStatus(SubscriptionStatus.ACTIVE);
-            return subscriptionRepository.save(pendingSubscription);
+            return Optional.of(subscriptionRepository.save(pendingSubscription));
         }
 
-        return createFreeSubscription(user);
+        return Optional.empty();
     }
 
     private Subscription createPendingSubscription(
@@ -140,11 +147,6 @@ public class SubscriptionLifecycleService {
 
         return effectivePlanComparator()
                 .compare(requestedPlan, currentPlan) < 0;
-    }
-
-    private boolean isPendingReady(Subscription subscription) {
-        return subscription.getStartDate() == null
-                || !subscription.getStartDate().isAfter(LocalDate.now());
     }
 
     private int compareEffectiveSubscription(
@@ -193,6 +195,12 @@ public class SubscriptionLifecycleService {
             case "PREMIUM", "PRO", "PLUS" -> 2;
             default -> 1;
         };
+    }
+
+    private boolean isFreePlan(SubscriptionPlan plan) {
+        return plan != null
+                && plan.getName() != null
+                && FREE_PLAN_NAME.equalsIgnoreCase(plan.getName().trim());
     }
 
     private int numberOrZero(SubscriptionPlan plan) {
