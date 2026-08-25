@@ -13,6 +13,9 @@ public record AdminDocumentShareApprovalResponse(
         DocumentShareApprovalType shareType,
         ShareApprovalStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Long sharedWithUserId,
+        String sharedWithEmail,
+        String sharedWithName
 ) {
 }

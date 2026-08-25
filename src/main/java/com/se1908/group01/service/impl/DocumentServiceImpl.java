@@ -639,7 +639,9 @@ public class DocumentServiceImpl implements DocumentService {
 		if (existingShare.isPresent()) {
 			var share = existingShare.get();
 			share.setStatus(ShareApprovalStatus.PENDING_APPROVAL);
-			return toDocumentShareResponse(documentShareRepository.save(share));
+			var savedShare = documentShareRepository.save(share);
+			setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
+			return toDocumentShareResponse(savedShare);
 		}
 
 		var documentShare = new DocumentShare();
@@ -649,7 +651,9 @@ public class DocumentServiceImpl implements DocumentService {
 		// Gán trạng thái cho RIÊNG người này
 		documentShare.setStatus(ShareApprovalStatus.PENDING_APPROVAL);
 
-		return toDocumentShareResponse(documentShareRepository.save(documentShare));
+		var savedShare = documentShareRepository.save(documentShare);
+		setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, ShareApprovalStatus.PENDING_APPROVAL);
+		return toDocumentShareResponse(savedShare);
 	}
 
 	@Transactional(readOnly = true)
@@ -940,7 +944,30 @@ public class DocumentServiceImpl implements DocumentService {
 				.orElseThrow(() -> new ResourceNotFoundException("Share request not found"));
 
 		share.setStatus(status);
-		return toDocumentShareResponse(documentShareRepository.save(share));
+
+		var savedShare = documentShareRepository.save(share);
+
+		// THÊM LOGIC: Cập nhật lại Approval tổng của loại DIRECT sau khi Admin xử lý
+		var doc = share.getDocument();
+		// Lấy toàn bộ các share cá nhân của document này
+		var allShares = documentShareRepository
+				.findByDocument_DocumentIdAndOwnerIdOrderByCreatedAtDesc(doc.getDocumentId(), doc.getUserId());
+
+		boolean hasPending = allShares.stream().anyMatch(s -> s.getStatus() == ShareApprovalStatus.PENDING_APPROVAL);
+		boolean hasApproved = allShares.stream().anyMatch(s -> s.getStatus() == ShareApprovalStatus.APPROVED);
+
+		ShareApprovalStatus aggregateStatus = ShareApprovalStatus.UNREVIEWED;
+		if (hasPending) {
+			aggregateStatus = ShareApprovalStatus.PENDING_APPROVAL;
+		} else if (hasApproved) {
+			aggregateStatus = ShareApprovalStatus.APPROVED;
+		} else if (!allShares.isEmpty()) {
+			aggregateStatus = ShareApprovalStatus.REJECTED;
+		}
+
+		setApprovalStatusForType(doc, DocumentShareApprovalType.DIRECT, aggregateStatus);
+
+		return toDocumentShareResponse(savedShare);
 	}
 
 	@Transactional
@@ -979,27 +1006,73 @@ public class DocumentServiceImpl implements DocumentService {
 		}
 		assertAdmin();
 
-		var approvals = shareType == null
-				? documentShareApprovalRepository.findByStatus(status, pageable)
-				: documentShareApprovalRepository.findByStatusAndShareType(status, shareType, pageable);
+		List<AdminDocumentShareApprovalResponse> allApprovals = new java.util.ArrayList<>();
 
-		return approvals.map(approval -> {
-			var document = approval.getDocument();
-			var ownerEmail = userRepository.findById(document.getUserId())
-					.map(User::getEmail)
-					.orElse(null);
-			return new AdminDocumentShareApprovalResponse(
-					approval.getDocumentShareApprovalId(),
-					document.getDocumentId(),
-					document.getOriginalFileName(),
-					document.getUserId(),
-					ownerEmail,
-					approval.getShareType(),
-					approval.getStatus(),
-					approval.getCreatedAt(),
-					approval.getUpdatedAt()
-			);
-		});
+		// 1. LẤY DỮ LIỆU PUBLIC VÀ LINK
+		if (shareType == null || shareType != DocumentShareApprovalType.DIRECT) {
+			List<DocumentShareApproval> approvals = documentShareApprovalRepository.findAll();
+
+			allApprovals.addAll(approvals.stream()
+					.filter(a -> a.getStatus() == status)
+					.filter(a -> a.getShareType() != DocumentShareApprovalType.DIRECT)
+					.filter(a -> shareType == null || a.getShareType() == shareType)
+					.map(approval -> {
+						var document = approval.getDocument();
+						var ownerEmail = userRepository.findById(document.getUserId())
+								.map(User::getEmail).orElse(null);
+						return new AdminDocumentShareApprovalResponse(
+								approval.getDocumentShareApprovalId(),
+								document.getDocumentId(),
+								document.getOriginalFileName(),
+								document.getUserId(),
+								ownerEmail,
+								approval.getShareType(),
+								approval.getStatus(),
+								approval.getCreatedAt(),
+								approval.getUpdatedAt(),
+								null, null, null // PUBLIC/LINK không có người nhận cụ thể
+						);
+					}).toList());
+		}
+
+		// 2. LẤY DỮ LIỆU DIRECT (TỪ BẢNG MỚI)
+		if (shareType == null || shareType == DocumentShareApprovalType.DIRECT) {
+			List<DocumentShare> shares = documentShareRepository.findAll();
+
+			allApprovals.addAll(shares.stream()
+					.filter(s -> s.getStatus() == status)
+					.map(share -> {
+						var document = share.getDocument();
+						var ownerEmail = userRepository.findById(document.getUserId())
+								.map(User::getEmail).orElse(null);
+						return new AdminDocumentShareApprovalResponse(
+								share.getDocumentShareId(), // Dùng ID này làm approvalId
+								document.getDocumentId(),
+								document.getOriginalFileName(),
+								document.getUserId(),
+								ownerEmail,
+								DocumentShareApprovalType.DIRECT,
+								share.getStatus(),
+								share.getCreatedAt(),
+								share.getCreatedAt(),
+								share.getSharedWithUser().getUserId(),
+								share.getSharedWithUser().getEmail(),
+								share.getSharedWithUser().getFullName()
+						);
+					}).toList());
+		}
+
+		// 3. SẮP XẾP & PHÂN TRANG (PAGINATION)
+		allApprovals.sort((a, b) -> b.createdAt().compareTo(a.createdAt()));
+		int start = (int) pageable.getOffset();
+		int end = Math.min((start + pageable.getPageSize()), allApprovals.size());
+
+		List<AdminDocumentShareApprovalResponse> pageContent = new java.util.ArrayList<>();
+		if (start <= end) {
+			pageContent = allApprovals.subList(start, end);
+		}
+
+		return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, allApprovals.size());
 	}
 
 	@Transactional(readOnly = true)
@@ -1009,35 +1082,67 @@ public class DocumentServiceImpl implements DocumentService {
 			DocumentShareApprovalType shareType,
 			Pageable pageable
 	) {
-		// Lấy ID của user đang đăng nhập
 		var userId = currentUserService.getCurrentUserId();
+		List<UserDocumentShareApprovalResponse> allApprovals = new java.util.ArrayList<>();
 
-		Page<DocumentShareApproval> approvals;
+		// 1. LẤY DỮ LIỆU PUBLIC VÀ LINK (Từ bảng cũ)
+		if (shareType == null || shareType != DocumentShareApprovalType.DIRECT) {
+			List<DocumentShareApproval> approvals = documentShareApprovalRepository.findByDocument_UserId(userId);
 
-		// Lọc theo các tham số truyền vào
-		if (status != null && shareType != null) {
-			approvals = documentShareApprovalRepository.findByDocument_UserIdAndStatusAndShareType(userId, status, shareType, pageable);
-		} else if (status != null) {
-			approvals = documentShareApprovalRepository.findByDocument_UserIdAndStatus(userId, status, pageable);
-		} else if (shareType != null) {
-			approvals = documentShareApprovalRepository.findByDocument_UserIdAndShareType(userId, shareType, pageable);
-		} else {
-			approvals = documentShareApprovalRepository.findByDocument_UserId(userId, pageable);
+			allApprovals.addAll(approvals.stream()
+					.filter(a -> status == null || a.getStatus() == status)
+					// Lọc bỏ DIRECT cũ để không bị trùng lặp bóng ma
+					.filter(a -> a.getShareType() != DocumentShareApprovalType.DIRECT)
+					.filter(a -> shareType == null || a.getShareType() == shareType)
+					.map(approval -> {
+						var document = approval.getDocument();
+						return new UserDocumentShareApprovalResponse(
+								approval.getDocumentShareApprovalId(),
+								document.getDocumentId(),
+								document.getOriginalFileName(),
+								approval.getShareType(),
+								approval.getStatus(),
+								approval.getCreatedAt(),
+								approval.getUpdatedAt()
+						);
+					}).toList());
 		}
 
-		// Map sang DTO
-		return approvals.map(approval -> {
-			var document = approval.getDocument();
-			return new UserDocumentShareApprovalResponse(
-					approval.getDocumentShareApprovalId(),
-					document.getDocumentId(),
-					document.getOriginalFileName(),
-					approval.getShareType(),
-					approval.getStatus(),
-					approval.getCreatedAt(),
-					approval.getUpdatedAt()
-			);
-		});
+		// 2. LẤY DỮ LIỆU DIRECT (Từ bảng mới document_shares)
+		if (shareType == null || shareType == DocumentShareApprovalType.DIRECT) {
+			// Lấy các chia sẻ mà user này là chủ sở hữu (người gửi yêu cầu)
+			List<DocumentShare> shares = documentShareRepository.findByOwnerId(userId);
+
+			allApprovals.addAll(shares.stream()
+					.filter(s -> status == null || s.getStatus() == status)
+					.map(share -> {
+						var document = share.getDocument();
+						return new UserDocumentShareApprovalResponse(
+								share.getDocumentShareId(), // Dùng ID này làm approvalId
+								document.getDocumentId(),
+								document.getOriginalFileName(),
+								DocumentShareApprovalType.DIRECT,
+								share.getStatus(),
+								share.getCreatedAt(),
+								share.getCreatedAt() // Lấy tạm createdAt làm updatedAt
+						);
+					}).toList());
+		}
+
+		// 3. SẮP XẾP & PHÂN TRANG
+		// LƯU Ý: Nếu DTO của bạn là "record", hãy dùng a.createdAt().
+		// Nếu là "class" thường, hãy đổi thành a.getCreatedAt() nhé!
+		allApprovals.sort((a, b) -> b.createdAt().compareTo(a.createdAt()));
+
+		int start = (int) pageable.getOffset();
+		int end = Math.min((start + pageable.getPageSize()), allApprovals.size());
+
+		List<UserDocumentShareApprovalResponse> pageContent = new java.util.ArrayList<>();
+		if (start <= end) {
+			pageContent = allApprovals.subList(start, end);
+		}
+
+		return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, allApprovals.size());
 	}
 
 	@Transactional
@@ -1285,7 +1390,10 @@ public class DocumentServiceImpl implements DocumentService {
 		if (Boolean.TRUE.equals(doc.getIsDeleted())) {
 			throw new ResourceNotFoundException("Shared document not found");
 		}
-		assertApprovedForDisplay(doc);
+
+		if (documentShare.getStatus() != ShareApprovalStatus.APPROVED) {
+			throw new ResourceNotFoundException("Your access request to this document is not approved");
+		}
 		return doc;
 	}
 

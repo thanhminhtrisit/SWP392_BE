@@ -7,8 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DocumentShareRepository extends JpaRepository<DocumentShare, Long> {
 
-	boolean existsByDocument_DocumentIdAndSharedWithUser_UserId(Long documentId, Long sharedWithUserId);
-
 	List<DocumentShare> findBySharedWithUser_UserIdOrderByCreatedAtDesc(Long sharedWithUserId);
 
 	Optional<DocumentShare> findByDocument_DocumentIdAndSharedWithUser_UserId(Long documentId, Long sharedWithUserId);
@@ -22,4 +20,6 @@ public interface DocumentShareRepository extends JpaRepository<DocumentShare, Lo
 	List<DocumentShare> findByDocument_DocumentIdAndOwnerIdOrderByCreatedAtDesc(Long documentId, Long ownerId);
 
 	void deleteByDocument_DocumentId(Long documentId);
+
+	List<DocumentShare> findByOwnerId(Long ownerId);
 }

@@ -8,14 +8,14 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface DocumentShareApprovalRepository extends JpaRepository<DocumentShareApproval, Long> {
 
 	Optional<DocumentShareApproval> findByDocument_DocumentIdAndShareType(Long documentId, DocumentShareApprovalType shareType);
 
 	List<DocumentShareApproval> findByDocument_DocumentId(Long documentId);
-
-	boolean existsByDocument_DocumentIdAndShareTypeAndStatus(Long documentId, DocumentShareApprovalType shareType, ShareApprovalStatus status);
 
 	void deleteByDocument_DocumentId(Long documentId);
 
@@ -27,11 +27,22 @@ public interface DocumentShareApprovalRepository extends JpaRepository<DocumentS
 			Pageable pageable
 	);
 
-	Page<DocumentShareApproval> findByDocument_UserId(Long userId, Pageable pageable);
+	@Query(value = "SELECT a FROM DocumentShareApproval a " +
+			"JOIN FETCH a.document d " +
+			"WHERE d.userId = :userId " +
+			"AND (:status IS NULL OR a.status = :status) " +
+			"AND (:shareType IS NULL OR a.shareType = :shareType)",
+			countQuery = "SELECT count(a) FROM DocumentShareApproval a " +
+					"JOIN a.document d " +
+					"WHERE d.userId = :userId " +
+					"AND (:status IS NULL OR a.status = :status) " +
+					"AND (:shareType IS NULL OR a.shareType = :shareType)")
+	Page<DocumentShareApproval> findMyApprovalsWithFilters(
+			@Param("userId") Long userId, // Thay kiểu dữ liệu cho khớp với user ID của bạn
+			@Param("status") ShareApprovalStatus status,
+			@Param("shareType") DocumentShareApprovalType shareType,
+			Pageable pageable
+	);
 
-	Page<DocumentShareApproval> findByDocument_UserIdAndStatus(Long userId, ShareApprovalStatus status, Pageable pageable);
-
-	Page<DocumentShareApproval> findByDocument_UserIdAndStatusAndShareType(Long userId, ShareApprovalStatus status, DocumentShareApprovalType shareType, Pageable pageable);
-
-	Page<DocumentShareApproval> findByDocument_UserIdAndShareType(Long userId, DocumentShareApprovalType shareType, Pageable pageable);
+	List<DocumentShareApproval> findByDocument_UserId(Long userId);
 }
